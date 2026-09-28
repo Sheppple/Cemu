@@ -42,6 +42,14 @@ It installs as a separate app: `applicationId` is `info.cemu.cemu.portal` and th
   Chase, Holiday and other special editions are variants, and appear under **Variants** or **All
   versions** in the filters. Traps, magic items and vehicles are never merged, because different
   traps share one figure id. Cards show the Series number. The rules are in `SkylanderVersions.kt`.
+- **Only figures for the game you're playing:** the portal detects the running Skylanders game
+  from its title and only shows figures that work in it. Characters are shown if they debuted in
+  that game or an earlier one, including all their later Series. Traps, magic items and vehicles are
+  shown if they came out in that game or earlier. The first row of the filters shows the detected
+  game and lets you pick a different game, or **Any game**.
+- **Favourites:** tap the star on a card to make it a favourite, and tap **★ Favourites** above the
+  grid to see only your favourites. Favourites are per character, so they carry over between a
+  character's Series and variants.
 - **Filters:** the filter button shows rows of chips for type (Traps, Vehicles, Giants, Swappers…),
   element and game. Only filters that match at least one of your figures are shown.
 - **Theme:** black background with gold highlights, to suit the AMOLED bottom screen.

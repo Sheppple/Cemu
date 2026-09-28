@@ -416,3 +416,9 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_resumeTitle([[maybe_unused]]
 {
 	CafeSystem::ResumeTitle();
 }
+
+extern "C" [[maybe_unused]] JNIEXPORT jstring JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_getForegroundTitleName(JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return env->NewStringUTF(CafeSystem::GetForegroundTitleName().c_str());
+}

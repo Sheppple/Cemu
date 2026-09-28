@@ -125,6 +125,25 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
         .map { it.skylanderTeams }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val skylanderFavourites = AppSettingsStore.dataStore.data
+        .map { it.skylanderFavourites }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    fun toggleSkylanderFavourite(favouriteKey: String) {
+        viewModelScope.launch {
+            AppSettingsStore.dataStore.updateData { settings ->
+                val favourites = settings.skylanderFavourites
+                settings.copy(
+                    skylanderFavourites = if (favouriteKey in favourites) {
+                        favourites - favouriteKey
+                    } else {
+                        favourites + favouriteKey
+                    }
+                )
+            }
+        }
+    }
+
     /** Saves the figures currently on the portal as a team. Returns false if the portal is empty. */
     fun saveSkylanderTeam(): Boolean {
         val paths = skylanderSlotPaths.value

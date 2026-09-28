@@ -76,6 +76,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import info.cemu.cemu.R
 import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices
+import info.cemu.cemu.nativeinterface.NativeEmulation
 import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices.InstalledFigure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -151,6 +152,16 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
     var gameFilter by rememberSaveable { mutableStateOf<SkylanderGame?>(null) }
     var versionFilter by rememberSaveable { mutableStateOf(VersionFilter.MAIN) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val favourites by viewModel.skylanderFavourites.collectAsState()
+
+    // Only figures that work in the running game are shown. The game is detected from the running
+    // title, and can be changed in the filters.
+    val detectedGame = remember {
+        runCatching { SkylanderVersions.gameForTitle(NativeEmulation.getForegroundTitleName()) }.getOrNull()
+    }
+    var isGameAuto by rememberSaveable { mutableStateOf(true) }
+    var chosenGame by rememberSaveable { mutableStateOf<SkylanderGame?>(null) }
+    val playingGame = if (isGameAuto) detectedGame else chosenGame
 
     val names = remember { skylanderFigureNames() }
     val figures by produceState(emptyList(), installedFigures) {
@@ -160,20 +171,31 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
         value = withContext(Dispatchers.IO) { runCatching { loadSkylanderArtIndex() }.getOrDefault(emptyMap()) }
     }
     val figuresByPath = remember(figures) { figures.associateBy { it.installed.path } }
-    val filteredFigures = remember(figures, typeFilter, elementFilter, gameFilter, versionFilter) {
-        figures.filter { figure ->
-            (typeFilter == null || figure.info?.type == typeFilter) &&
+    val filteredFigures = remember(
+        figures, typeFilter, elementFilter, gameFilter, versionFilter, favourites, playingGame,
+    ) {
+        val matching = figures.filter { figure ->
+            (playingGame == null || figure.isAvailableIn(playingGame)) &&
+                (typeFilter == null || figure.info?.type == typeFilter) &&
                 (elementFilter == null || figure.element == elementFilter) &&
                 (gameFilter == null || figure.info?.game == gameFilter) &&
                 when (versionFilter) {
                     VersionFilter.MAIN -> figure.isMainVersion
+                    VersionFilter.FAVOURITES -> figure.favouriteKey in favourites
                     VersionFilter.VARIANTS -> !figure.isMainVersion
                     VersionFilter.ALL -> true
                 }
         }
+        if (versionFilter == VersionFilter.FAVOURITES) {
+            // One card per favourite character: its main version if installed, else another one.
+            matching.groupBy { it.favouriteKey }
+                .map { (_, versions) -> versions.firstOrNull { it.isMainVersion } ?: versions.first() }
+                .sortedWith(compareBy({ it.name.lowercase() }, { it.installed.name.lowercase() }))
+        } else {
+            matching
+        }
     }
-    val isFiltered = typeFilter != null || elementFilter != null || gameFilter != null ||
-        versionFilter != VersionFilter.MAIN
+    val isFiltered = typeFilter != null || elementFilter != null || gameFilter != null || !isGameAuto
 
     LaunchedEffect(Unit) {
         // Figures may have been created or deleted since the view model was first used.
@@ -287,8 +309,19 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
             )
         }
 
+        VersionChips(selected = versionFilter, onSelectedChange = { versionFilter = it })
+
         if (showFilters) {
-            VersionChips(selected = versionFilter, onSelectedChange = { versionFilter = it })
+            PlayingGameChips(
+                detectedGame = detectedGame,
+                isAuto = isGameAuto,
+                chosenGame = chosenGame,
+                onAuto = { isGameAuto = true },
+                onChoose = {
+                    isGameAuto = false
+                    chosenGame = it
+                },
+            )
             FilterRows(
                 figures = figures,
                 typeFilter = typeFilter,
@@ -311,11 +344,16 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
                     .padding(8.dp),
             )
         } else {
+            val placeHint = tr(
+                "Tap a figure to place it on {0}. Traps and magic items go to their own slots. Tap a glowing figure to remove it.",
+                slotLabel(selectedSlot),
+            )
             Text(
-                text = tr(
-                    "Tap a figure to place it on {0}. Traps and magic items go to their own slots. Tap a glowing figure to remove it.",
-                    slotLabel(selectedSlot),
-                ),
+                text = if (playingGame != null) {
+                    tr("Showing figures that work in {0}.", tr(playingGame.label)) + " " + placeHint
+                } else {
+                    placeHint
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -329,10 +367,14 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (figures.isEmpty()) {
-                        tr("No figures found. Create figures from the Emulated USB Devices menu.")
-                    } else {
-                        tr("No figures match these filters.")
+                    text = when {
+                        figures.isEmpty() ->
+                            tr("No figures found. Create figures from the Emulated USB Devices menu.")
+
+                        versionFilter == VersionFilter.FAVOURITES ->
+                            tr("No favourites yet. Tap the star on a figure to add it here.")
+
+                        else -> tr("No figures match these filters.")
                     },
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -353,6 +395,8 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
                     figure = figure,
                     artFile = artIndex.findArt(figure),
                     loadedSlot = loadedSlot,
+                    isFavourite = figure.favouriteKey in favourites,
+                    onToggleFavourite = { viewModel.toggleSkylanderFavourite(figure.favouriteKey) },
                     enabled = !isSwapping,
                     onClick = {
                         if (loadedSlot != null) {
@@ -601,6 +645,8 @@ private fun FigureCard(
     figure: PortalFigure,
     artFile: File?,
     loadedSlot: Int?,
+    isFavourite: Boolean,
+    onToggleFavourite: () -> Unit,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
@@ -653,6 +699,23 @@ private fun FigureCard(
                     modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
                 )
             }
+            IconButton(
+                onClick = onToggleFavourite,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(2.dp)
+                    .size(36.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_favorite),
+                    contentDescription = if (isFavourite) tr("Remove from favourites") else tr("Add to favourites"),
+                    tint = if (isFavourite) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.55f),
+                    modifier = Modifier
+                        .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                        .padding(5.dp)
+                        .size(18.dp),
+                )
+            }
             if (loadedSlot != null) {
                 Text(
                     text = slotLabel(loadedSlot),
@@ -695,9 +758,55 @@ private fun VersionChips(selected: VersionFilter, onSelectedChange: (VersionFilt
     }
 }
 
+/** Chips to pick which game's figures are shown: the detected game, all games, or a chosen one. */
+@Composable
+private fun PlayingGameChips(
+    detectedGame: SkylanderGame?,
+    isAuto: Boolean,
+    chosenGame: SkylanderGame?,
+    onAuto: () -> Unit,
+    onChoose: (SkylanderGame?) -> Unit,
+) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        item {
+            FilterChip(
+                selected = isAuto,
+                onClick = onAuto,
+                label = {
+                    Text(
+                        if (detectedGame != null) {
+                            tr("Playing: {0}", tr(detectedGame.label))
+                        } else {
+                            tr("Playing: not detected")
+                        }
+                    )
+                },
+                colors = portalChipColors(),
+            )
+        }
+        item {
+            FilterChip(
+                selected = !isAuto && chosenGame == null,
+                onClick = { onChoose(null) },
+                label = { Text(tr("Any game")) },
+                colors = portalChipColors(),
+            )
+        }
+        items(SkylanderGame.entries) { game ->
+            FilterChip(
+                selected = !isAuto && chosenGame == game,
+                onClick = { onChoose(game) },
+                label = { Text(tr("Works in {0}", tr(game.label))) },
+                colors = portalChipColors(),
+            )
+        }
+    }
+}
+
 /** Which versions of the figures the grid shows (see [SkylanderVersions]). */
 private enum class VersionFilter(val label: String) {
     MAIN("Main roster"),
+    FAVOURITES("★ Favourites"),
     VARIANTS("Variants"),
     ALL("All versions"),
 }

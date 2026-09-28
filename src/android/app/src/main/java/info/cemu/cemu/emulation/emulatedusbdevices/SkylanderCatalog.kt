@@ -191,10 +191,12 @@ object SkylanderCatalog {
 
     private val byIdAndVariant: Map<Int, SkylanderInfo>
     private val byId: Map<Int, SkylanderInfo>
+    private val earliestGameById: Map<Int, SkylanderGame>
 
     init {
         val exact = HashMap<Int, SkylanderInfo>()
         val firstById = HashMap<Int, SkylanderInfo>()
+        val earliest = HashMap<Int, SkylanderGame>()
         for (i in ENTRIES.indices step 5) {
             val info = SkylanderInfo(
                 game = SkylanderGame.entries[ENTRIES[i + 2]],
@@ -202,6 +204,10 @@ object SkylanderCatalog {
                 type = SkylanderType.entries[ENTRIES[i + 4]],
             )
             exact[key(ENTRIES[i], ENTRIES[i + 1])] = info
+            val game = info.game
+            if (game != null) {
+                earliest.merge(ENTRIES[i], game) { a, b -> if (a.ordinal <= b.ordinal) a else b }
+            }
             val previous = firstById[ENTRIES[i]]
             firstById[ENTRIES[i]] = when {
                 previous == null -> info
@@ -212,6 +218,24 @@ object SkylanderCatalog {
         }
         byIdAndVariant = exact
         byId = firstById
+        earliestGameById = earliest
+    }
+
+    /**
+     * The first game any version of this figure id came out in. For characters this is the game
+     * the character debuted in, e.g. Giants for Jet-Vac even though his Series 3 is from Trap Team.
+     */
+    fun debutGame(id: Int): SkylanderGame? =
+        earliestGameById[id] ?: SkylanderGame.IMAGINATORS.takeIf { id in IMAGINATORS_ELEMENTS }
+
+    /**
+     * The game this exact figure came out in. Figures missing from the table use the release year
+     * stored in the top bits of the variant, and originals (variant 0) use [debutGame].
+     */
+    fun releaseGame(id: Int, variant: Int): SkylanderGame? {
+        byIdAndVariant[key(id, variant)]?.game?.let { return it }
+        val year = variant ushr 12
+        return if (year > 0) SkylanderGame.entries.getOrNull(year) else debutGame(id)
     }
 
     private fun key(id: Int, variant: Int) = (id shl 16) or variant

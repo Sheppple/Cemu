@@ -28,7 +28,24 @@ data class PortalFigure(
     val isMainVersion: Boolean = true,
     /** The Series number (1-4) of a normal character release, if known. */
     val series: Int? = null,
+    /**
+     * The earliest game this figure can be used in: for characters the game they debuted in (so
+     * later Series of a character stay available too), for other toys the game they came out in.
+     * Null if unknown.
+     */
+    val availableFrom: SkylanderGame? = null,
 ) {
+    /** Favourites are per character, so they carry over between a character's versions. */
+    val favouriteKey: String
+        get() {
+            val (id, variant) = idAndVariant ?: return "file:${installed.path}"
+            return if (SkylanderVersions.isCharacter(info)) "character:$id" else "figure:$id:$variant"
+        }
+
+    /** Whether the figure works in [game]. Figures from unknown games are always shown. */
+    fun isAvailableIn(game: SkylanderGame): Boolean =
+        availableFrom == null || availableFrom.ordinal <= game.ordinal
+
     val element: SkylanderElement get() = info?.element ?: SkylanderElement.OTHER
     val showsFileName: Boolean get() = !installed.name.startsWith(name, ignoreCase = true)
 
@@ -98,6 +115,13 @@ private fun markMainVersions(
         figure.copy(
             isMainVersion = isMain,
             series = figure.idAndVariant?.let { seriesNumbers[it] },
+            availableFrom = figure.idAndVariant?.let { (id, variant) ->
+                if (SkylanderVersions.isCharacter(figure.info)) {
+                    SkylanderCatalog.debutGame(id)
+                } else {
+                    SkylanderCatalog.releaseGame(id, variant)
+                }
+            },
         )
     }
 }

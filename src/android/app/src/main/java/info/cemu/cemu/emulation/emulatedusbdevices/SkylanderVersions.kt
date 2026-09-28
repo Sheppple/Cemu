@@ -48,6 +48,20 @@ object SkylanderVersions {
 
     fun isCharacter(info: SkylanderInfo?): Boolean = info?.type in CHARACTER_TYPES
 
+    /** Works out which Skylanders game is running from its title, e.g. "Skylanders SWAP FORCE". */
+    fun gameForTitle(title: String): SkylanderGame? {
+        val normalized = title.lowercase().replace(Regex("[^a-z]"), "")
+        return when {
+            "imaginators" in normalized -> SkylanderGame.IMAGINATORS
+            "superchargers" in normalized -> SkylanderGame.SUPERCHARGERS
+            "trapteam" in normalized -> SkylanderGame.TRAP_TEAM
+            "swapforce" in normalized -> SkylanderGame.SWAP_FORCE
+            "giants" in normalized -> SkylanderGame.GIANTS
+            "spyrosadventure" in normalized -> SkylanderGame.SPYROS_ADVENTURE
+            else -> null
+        }
+    }
+
     /** Whether this is the original release or a normal Series repose, rather than a variant. */
     fun isNormalRelease(variant: Int, name: String, isCharacter: Boolean): Boolean {
         if (isCharacter &&

@@ -59,4 +59,8 @@ object NativeEmulation {
 
     @JvmStatic
     external fun supportsLoadingCustomDriver(): Boolean
+
+    /** The name of the running title, e.g. "Skylanders SWAP FORCE", or empty if none is running. */
+    @JvmStatic
+    external fun getForegroundTitleName(): String
 }

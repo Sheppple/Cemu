@@ -78,6 +78,8 @@ data class AppSettings(
     val inputOverlaySettings: InputOverlaySettings = InputOverlaySettings(),
     val hotkeySettings: Map<HotkeyAction, HotkeyCombo> = emptyMap(),
     val skylanderTeams: List<SkylanderTeam> = emptyList(),
+    /** Favourite Skylanders, by [info.cemu.cemu.emulation.emulatedusbdevices.PortalFigure.favouriteKey]. */
+    val skylanderFavourites: Set<String> = emptySet(),
 )
 
 object AppSettingsSerializer : Serializer<AppSettings> {
