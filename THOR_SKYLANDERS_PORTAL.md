@@ -50,13 +50,14 @@ Figures without an image get a coloured card with their initials.
 - `EmulatedUSBDevicesViewModel` now remembers the file path loaded into each Skylander slot, which
   is used to highlight loaded figures, and has `placeSkylanderFigure`, which does the delayed swap.
 
-## Still to verify on the device
+## Status on the device
 
-This change has not been compiled or run yet. Check on the Thor:
+The APK builds on GitHub Actions (`.github/workflows/thor_portal_apk.yml`; download the
+`cemu-portal-apk` artifact from the run).
 
-- [ ] The unmodified `android-port-dual` branch builds, and then this branch builds.
-- [ ] The portal appears on the bottom screen once the game has finished loading.
-- [ ] Placing a figure makes it appear in game, and removing it makes it disappear.
+- [x] The branch builds.
+- [x] The portal appears on the Thor's bottom screen while a game runs.
+- [x] Placing figures from the portal works.
 - [ ] Swapping works: tap a different figure while a slot is occupied.
 - [ ] Controller input still reaches the game while you touch the portal, and emulation does not
       stutter or pause.
