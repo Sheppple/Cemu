@@ -58,12 +58,26 @@ data class InputOverlaySettings(
 )
 
 @Serializable
+data class SkylanderTeamFigure(
+    val slot: Int,
+    val path: String,
+    val name: String,
+)
+
+/** A saved set of Skylanders figures and the portal slots they go on. */
+@Serializable
+data class SkylanderTeam(
+    val figures: List<SkylanderTeamFigure>,
+)
+
+@Serializable
 data class AppSettings(
     val guiSettings: GuiSettings = GuiSettings(),
     val emulationSettings: EmulationSettings = EmulationSettings(),
     val storageSettings: StorageSettings = StorageSettings(),
     val inputOverlaySettings: InputOverlaySettings = InputOverlaySettings(),
     val hotkeySettings: Map<HotkeyAction, HotkeyCombo> = emptyMap(),
+    val skylanderTeams: List<SkylanderTeam> = emptyList(),
 )
 
 object AppSettingsSerializer : Serializer<AppSettings> {

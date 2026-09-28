@@ -1,11 +1,22 @@
 package info.cemu.cemu.emulation.emulatedusbdevices
 
-import android.graphics.BitmapFactory
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
+import info.cemu.cemu.common.settings.SkylanderTeam
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,7 +64,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -71,7 +81,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.RandomAccessFile
 
 /**
  * Touch-first Skylanders portal meant to fill a secondary display: a row of portal slots, optional
@@ -109,41 +118,6 @@ private fun slotLabel(slot: Int): String = when (slot) {
     else -> tr("Slot {0}", slot + 1)
 }
 
-/** An installed figure file together with what its contents say about it. */
-private data class PortalFigure(
-    val installed: InstalledFigure,
-    val name: String,
-    val info: SkylanderInfo?,
-) {
-    val element: SkylanderElement get() = info?.element ?: SkylanderElement.OTHER
-    val showsFileName: Boolean get() = !installed.name.startsWith(name, ignoreCase = true)
-}
-
-private fun readFigureIdAndVariant(path: String): Pair<Int, Int>? = runCatching {
-    RandomAccessFile(path, "r").use { file ->
-        val header = ByteArray(0x20)
-        file.readFully(header)
-        val id = (header[0x10].toInt() and 0xFF) or ((header[0x11].toInt() and 0xFF) shl 8)
-        val variant = (header[0x1C].toInt() and 0xFF) or ((header[0x1D].toInt() and 0xFF) shl 8)
-        id to variant
-    }
-}.getOrNull()
-
-private fun loadPortalFigures(
-    installedFigures: Array<InstalledFigure>,
-    names: Map<Pair<Int, Int>, String>,
-): List<PortalFigure> = installedFigures.map { installed ->
-    val idAndVariant = readFigureIdAndVariant(installed.path)
-    val name = idAndVariant?.let { (id, variant) ->
-        names[id to variant] ?: names[id to 0]
-    } ?: installed.name
-    PortalFigure(
-        installed = installed,
-        name = name,
-        info = idAndVariant?.let { (id, variant) -> SkylanderCatalog.find(id, variant) },
-    )
-}.sortedWith(compareBy({ it.name.lowercase() }, { it.installed.name.lowercase() }))
-
 /** Picks the slot a tapped figure goes to, based on its type. */
 private fun targetSlot(figure: PortalFigure, selectedSlot: Int, slots: Array<String?>): Int =
     when (figure.info?.type) {
@@ -169,16 +143,20 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
     var selectedSlot by rememberSaveable { mutableIntStateOf(PLAYER_1_SLOT) }
     var showAllSlots by rememberSaveable { mutableStateOf(false) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
+    var showTeams by rememberSaveable { mutableStateOf(false) }
+    var artVersion by remember { mutableIntStateOf(0) }
+    val teams by viewModel.skylanderTeams.collectAsState()
     var typeFilter by rememberSaveable { mutableStateOf<SkylanderType?>(null) }
     var elementFilter by rememberSaveable { mutableStateOf<SkylanderElement?>(null) }
     var gameFilter by rememberSaveable { mutableStateOf<SkylanderGame?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val names = remember {
-        viewModel.skylanderFigures.associate { (it.id.toInt() to it.variant.toInt()) to it.name }
-    }
+    val names = remember { skylanderFigureNames() }
     val figures by produceState(emptyList(), installedFigures) {
         value = withContext(Dispatchers.IO) { loadPortalFigures(installedFigures, names) }
+    }
+    val artIndex by produceState(emptyMap<String, File>(), artVersion) {
+        value = withContext(Dispatchers.IO) { runCatching { loadSkylanderArtIndex() }.getOrDefault(emptyMap()) }
     }
     val figuresByPath = remember(figures) { figures.associateBy { it.installed.path } }
     val filteredFigures = remember(figures, typeFilter, elementFilter, gameFilter) {
@@ -245,7 +223,21 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
                     },
                 )
             }
-            IconButton(onClick = { viewModel.installedSkylanderFigures.refresh() }) {
+            IconButton(onClick = { showTeams = !showTeams }) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_lists),
+                    contentDescription = tr("Teams"),
+                    tint = if (showTeams) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            IconButton(onClick = {
+                viewModel.installedSkylanderFigures.refresh()
+                artVersion++
+            }) {
                 Icon(
                     painter = painterResource(R.drawable.ic_refresh),
                     contentDescription = tr("Refresh"),
@@ -260,9 +252,10 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
             }
         }
 
+        val slotFigures = slotPaths.map { path -> path?.let(figuresByPath::get) }
         PortalSlotsRow(
             slots = slots,
-            slotFigures = slotPaths.map { path -> path?.let(figuresByPath::get) },
+            slotFigures = slotFigures,
             selectedSlot = selectedSlot,
             showAllSlots = showAllSlots,
             enabled = !isSwapping,
@@ -275,6 +268,17 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
                 }
             },
         )
+
+        if (showTeams) {
+            TeamsRow(
+                teams = teams,
+                canSave = slots.any { it != null },
+                enabled = !isSwapping,
+                onSave = { viewModel.saveSkylanderTeam() },
+                onLoad = viewModel::loadSkylanderTeam,
+                onDelete = viewModel::deleteSkylanderTeam,
+            )
+        }
 
         if (showFilters) {
             FilterRows(
@@ -339,6 +343,7 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
                 val loadedSlot = slotPaths.indexOf(figure.installed.path).takeIf { it >= 0 }
                 FigureCard(
                     figure = figure,
+                    artFile = artIndex.findArt(figure),
                     loadedSlot = loadedSlot,
                     enabled = !isSwapping,
                     onClick = {
@@ -372,36 +377,41 @@ private fun PortalSlotsRow(
     val hiddenInUse =
         if (showAllSlots) 0 else (NAMED_SLOT_COUNT..<slots.size).count { slots[it] != null }
 
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(visibleSlots) { slot ->
-            SlotCard(
-                label = slotLabel(slot),
-                figureName = slots[slot],
-                element = slotFigures.getOrNull(slot)?.element,
-                isSelected = slot == selectedSlot,
-                enabled = enabled,
-                onClick = { onSelectSlot(slot) },
-                onClear = { onClearSlot(slot) },
-            )
-        }
-        item {
-            Card(
-                modifier = Modifier
-                    .width(64.dp)
-                    .height(72.dp)
-                    .clickable(onClick = onToggleAllSlots),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = when {
-                            showAllSlots -> tr("Less")
-                            hiddenInUse > 0 -> tr("More\n({0})", hiddenInUse)
-                            else -> tr("More")
-                        },
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center,
-                    )
+    PortalRing(slotFigures = slotFigures) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 14.dp),
+        ) {
+            items(visibleSlots) { slot ->
+                SlotCard(
+                    label = slotLabel(slot),
+                    figureName = slots[slot],
+                    element = slotFigures.getOrNull(slot)?.element,
+                    isSelected = slot == selectedSlot,
+                    enabled = enabled,
+                    onClick = { onSelectSlot(slot) },
+                    onClear = { onClearSlot(slot) },
+                )
+            }
+            item {
+                Card(
+                    modifier = Modifier
+                        .width(64.dp)
+                        .height(72.dp)
+                        .clickable(onClick = onToggleAllSlots),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = when {
+                                showAllSlots -> tr("Less")
+                                hiddenInUse > 0 -> tr("More\n({0})", hiddenInUse)
+                                else -> tr("More")
+                            },
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                 }
             }
         }
@@ -581,6 +591,7 @@ private fun portalChipColors() = FilterChipDefaults.filterChipColors(
 @Composable
 private fun FigureCard(
     figure: PortalFigure,
+    artFile: File?,
     loadedSlot: Int?,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -608,6 +619,7 @@ private fun FigureCard(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 FigureArt(
                     figure = figure,
+                    artFile = artFile,
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f),
@@ -659,35 +671,11 @@ private fun figureSubtitle(figure: PortalFigure): String {
     return listOfNotNull(tr(info.element.label), type).joinToString(" · ")
 }
 
-private val ART_EXTENSIONS = listOf("png", "jpg", "jpeg", "webp")
-private const val ART_TARGET_SIZE_PX = 320
-
-private fun findFigureArt(figure: PortalFigure): File? {
-    val artDir = File(File(figure.installed.path).parentFile ?: return null, "art")
-    return listOf(figure.installed.name, figure.name)
-        .distinct()
-        .flatMap { name -> ART_EXTENSIONS.map { File(artDir, "$name.$it") } }
-        .firstOrNull { it.isFile }
-}
-
-private fun decodeFigureArt(file: File): ImageBitmap? {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(file.path, bounds)
-    var sampleSize = 1
-    while (bounds.outWidth / (sampleSize * 2) >= ART_TARGET_SIZE_PX &&
-        bounds.outHeight / (sampleSize * 2) >= ART_TARGET_SIZE_PX
-    ) {
-        sampleSize *= 2
-    }
-    val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-    return BitmapFactory.decodeFile(file.path, options)?.asImageBitmap()
-}
-
 @Composable
-private fun FigureArt(figure: PortalFigure, modifier: Modifier) {
-    val art by produceState<ImageBitmap?>(initialValue = null, figure.installed.path, figure.name) {
-        value = withContext(Dispatchers.IO) {
-            runCatching { findFigureArt(figure)?.let(::decodeFigureArt) }.getOrNull()
+private fun FigureArt(figure: PortalFigure, artFile: File?, modifier: Modifier) {
+    val art by produceState<ImageBitmap?>(initialValue = null, artFile?.path, artFile?.lastModified()) {
+        value = artFile?.let { file ->
+            withContext(Dispatchers.IO) { runCatching { decodeSkylanderArt(file) }.getOrNull() }
         }
     }
 
@@ -768,5 +756,190 @@ private fun PortalTheme(content: @Composable () -> Unit) {
         Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
             content()
         }
+    }
+}
+
+private fun ledColor(rgb: Int): Color? = if (rgb and 0xFFFFFF == 0) null else Color(0xFF000000.toInt() or rgb)
+
+/**
+ * A drawn portal behind the slot cards. The ring takes the colours the game sets on the real
+ * portal's LEDs, falling back to the element colours of the figures on Player 1 and Player 2.
+ * It flashes briefly when figures are placed or removed. It is not animated otherwise, so it
+ * costs nothing while the game runs.
+ */
+@Composable
+private fun PortalRing(slotFigures: List<PortalFigure?>, content: @Composable () -> Unit) {
+    val ledColors by produceState(IntArray(3)) {
+        while (true) {
+            val colors = runCatching { NativeEmulatedUSBDevices.getSkylanderPortalColors() }.getOrNull()
+            if (colors != null && colors.size == 3 && !colors.contentEquals(value)) {
+                value = colors
+            }
+            delay(500)
+        }
+    }
+    val gold = MaterialTheme.colorScheme.primary
+    val leftTarget = ledColor(ledColors[0]) ?: slotFigures.getOrNull(PLAYER_1_SLOT)?.element?.color ?: gold
+    val rightTarget = ledColor(ledColors[1]) ?: slotFigures.getOrNull(PLAYER_2_SLOT)?.element?.color ?: leftTarget
+    val trapTarget = ledColor(ledColors[2]) ?: Color.Transparent
+    val left by animateColorAsState(leftTarget, tween(600), label = "portalLeft")
+    val right by animateColorAsState(rightTarget, tween(600), label = "portalRight")
+    val trap by animateColorAsState(trapTarget, tween(600), label = "portalTrap")
+
+    val flash = remember { Animatable(0f) }
+    val occupancy = slotFigures.map { it?.installed?.path }
+    LaunchedEffect(occupancy) {
+        flash.snapTo(1f)
+        flash.animateTo(0f, tween(900))
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(104.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val glow = 0.35f + 0.5f * flash.value
+            // Soft glow around the portal, squashed into an ellipse.
+            withTransform({ scale(1f, size.height / size.width, center) }) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(lerp(left, right, 0.5f).copy(alpha = glow), Color.Transparent),
+                        center = center,
+                        radius = size.width / 2f,
+                    ),
+                    radius = size.width / 2f,
+                    center = center,
+                )
+            }
+            val ringInset = 6.dp.toPx()
+            val ringSize = Size(size.width - ringInset * 2, size.height - ringInset * 2)
+            val ringTopLeft = Offset(ringInset, ringInset)
+            // The portal's top surface.
+            drawOval(color = Color(0xFF07070A), topLeft = ringTopLeft, size = ringSize)
+            // Trap light in the middle of the portal, as on the Trap Team portal.
+            if (trap.alpha > 0f) {
+                withTransform({ scale(1f, size.height / size.width, center) }) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(trap.copy(alpha = trap.alpha * 0.55f), Color.Transparent),
+                            center = center,
+                            radius = size.width * 0.3f,
+                        ),
+                        radius = size.width * 0.3f,
+                        center = center,
+                    )
+                }
+            }
+            // The lit ring: left LED colour on the left, right LED colour on the right.
+            drawOval(
+                brush = Brush.horizontalGradient(listOf(left, right)),
+                topLeft = ringTopLeft,
+                size = ringSize,
+                alpha = 0.75f + 0.25f * flash.value,
+                style = Stroke(width = 3.dp.toPx() + 3.dp.toPx() * flash.value),
+            )
+        }
+        content()
+    }
+}
+
+private fun teamLabel(team: SkylanderTeam): String =
+    team.figures.sortedBy { it.slot }.joinToString(", ") { it.name }
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TeamsRow(
+    teams: List<SkylanderTeam>,
+    canSave: Boolean,
+    enabled: Boolean,
+    onSave: () -> Unit,
+    onLoad: (SkylanderTeam) -> Unit,
+    onDelete: (SkylanderTeam) -> Unit,
+) {
+    var pendingDelete by remember { mutableStateOf<SkylanderTeam?>(null) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .height(56.dp)
+                        .clickable(enabled = canSave && enabled) {
+                            pendingDelete = null
+                            onSave()
+                        },
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (canSave) 1f else 0.3f)),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .padding(horizontal = 14.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = tr("+ Save team"),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = if (canSave) 1f else 0.4f),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                        )
+                    }
+                }
+            }
+            items(teams) { team ->
+                val isPendingDelete = team == pendingDelete
+                Card(
+                    modifier = Modifier
+                        .width(150.dp)
+                        .height(56.dp)
+                        .combinedClickable(
+                            enabled = enabled,
+                            onClick = {
+                                if (isPendingDelete) {
+                                    onDelete(team)
+                                    pendingDelete = null
+                                } else {
+                                    pendingDelete = null
+                                    onLoad(team)
+                                }
+                            },
+                            onLongClick = { pendingDelete = if (isPendingDelete) null else team },
+                        ),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isPendingDelete) {
+                            MaterialTheme.colorScheme.errorContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    ),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 10.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Text(
+                            text = if (isPendingDelete) tr("Tap again to delete") else teamLabel(team),
+                            fontSize = 12.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (isPendingDelete) MaterialTheme.colorScheme.onErrorContainer else Color.White,
+                        )
+                    }
+                }
+            }
+        }
+        Text(
+            text = if (teams.isEmpty()) {
+                tr("Put figures on the portal, then save them as a team to load them all with one tap.")
+            } else {
+                tr("Tap a team to load it. Long-press a team to delete it.")
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

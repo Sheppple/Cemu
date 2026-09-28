@@ -99,6 +99,16 @@ namespace nsyshid
 			return m_inUseByGame;
 		}
 
+		// Colours the game has set on the portal's LEDs, as 0xRRGGBB: left, right, trap.
+		std::array<uint32, 3> GetLedColors()
+		{
+			std::lock_guard lock(m_skyMutex);
+			auto pack = [](const SkylanderLEDColor& c) {
+				return (uint32(c.red) << 16) | (uint32(c.green) << 8) | uint32(c.blue);
+			};
+			return {pack(m_colorLeft), pack(m_colorRight), pack(m_colorTrap)};
+		}
+
 	  protected:
 		std::mutex m_skyMutex;
 		std::mutex m_queryMutex;

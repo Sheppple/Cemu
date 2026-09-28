@@ -83,6 +83,10 @@ object NativeEmulatedUSBDevices {
     @JvmStatic
     external fun isSkylanderPortalInUse(): Boolean
 
+    /** The portal LED colours set by the game, as 0xRRGGBB: left, right, trap. */
+    @JvmStatic
+    external fun getSkylanderPortalColors(): IntArray
+
     @JvmStatic
     external fun getInfinityFigureSlot(slot: Int): String?
 

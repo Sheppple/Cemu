@@ -313,6 +313,16 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulatedUSBDevices_isSkylanderPortalIn
 	return nsyshid::g_skyportal.IsInUseByGame();
 }
 
+extern "C" [[maybe_unused]] JNIEXPORT jintArray JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulatedUSBDevices_getSkylanderPortalColors(JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	auto colors = nsyshid::g_skyportal.GetLedColors();
+	jint values[3] = {jint(colors[0]), jint(colors[1]), jint(colors[2])};
+	jintArray result = env->NewIntArray(3);
+	env->SetIntArrayRegion(result, 0, 3, values);
+	return result;
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulatedUSBDevices_getSkylandersFigureSlot(JNIEnv* env, [[maybe_unused]] jclass clazz, jint slot)
 {

@@ -4,14 +4,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import info.cemu.cemu.common.coroutines.RefreshableStateFlow
+import info.cemu.cemu.common.settings.AppSettingsStore
+import info.cemu.cemu.common.settings.SkylanderTeam
+import info.cemu.cemu.common.settings.SkylanderTeamFigure
 import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 
 sealed class UsbDeviceEvent {
     object CreateFailed : UsbDeviceEvent()
@@ -108,6 +115,73 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
                 clearSkylandersFigure(slot)
                 delay(SKYLANDER_SWAP_DELAY_MS)
                 loadSkylanderFigure(figure, slot)
+            } finally {
+                _isSwappingSkylander.value = false
+            }
+        }
+    }
+
+    val skylanderTeams = AppSettingsStore.dataStore.data
+        .map { it.skylanderTeams }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Saves the figures currently on the portal as a team. Returns false if the portal is empty. */
+    fun saveSkylanderTeam(): Boolean {
+        val paths = skylanderSlotPaths.value
+        val names = skylanderSlots.state.value
+        val figures = paths.indices.mapNotNull { slot ->
+            val path = paths[slot] ?: return@mapNotNull null
+            SkylanderTeamFigure(slot = slot, path = path, name = names[slot] ?: File(path).nameWithoutExtension)
+        }
+        if (figures.isEmpty()) {
+            return false
+        }
+        val team = SkylanderTeam(figures)
+        viewModelScope.launch {
+            AppSettingsStore.dataStore.updateData { settings ->
+                if (team in settings.skylanderTeams) {
+                    settings
+                } else {
+                    settings.copy(skylanderTeams = settings.skylanderTeams + team)
+                }
+            }
+        }
+        return true
+    }
+
+    fun deleteSkylanderTeam(team: SkylanderTeam) {
+        viewModelScope.launch {
+            AppSettingsStore.dataStore.updateData { settings ->
+                settings.copy(skylanderTeams = settings.skylanderTeams - team)
+            }
+        }
+    }
+
+    /**
+     * Replaces everything on the portal with [team]. Figures whose files no longer exist are
+     * skipped. The old figures are removed first, then the team is placed after a short delay.
+     */
+    fun loadSkylanderTeam(team: SkylanderTeam) {
+        if (_isSwappingSkylander.value) {
+            return
+        }
+        _isSwappingSkylander.value = true
+        viewModelScope.launch {
+            try {
+                val hadFigures = skylanderSlots.state.value.any { it != null }
+                clearAllSkylanderFigures()
+                if (hadFigures) {
+                    delay(SKYLANDER_SWAP_DELAY_MS)
+                }
+                for (figure in team.figures) {
+                    val file = File(figure.path)
+                    if (figure.slot in 0..<NativeEmulatedUSBDevices.MAX_SKYLANDERS && file.isFile) {
+                        loadSkylanderFigure(
+                            NativeEmulatedUSBDevices.InstalledFigure(file.nameWithoutExtension, figure.path),
+                            figure.slot,
+                        )
+                    }
+                }
             } finally {
                 _isSwappingSkylander.value = false
             }

@@ -9,8 +9,11 @@ It installs as a separate app: `applicationId` is `info.cemu.cemu.portal` and th
 ## Using it
 
 1. In Cemu's settings, enable **Emulated USB Devices → Emulate Skylander Portal**.
-2. Create figures once, either from **Emulated USB Devices → Skylanders → Create** in the in-game
-   menu, or by copying `.sky`/`.bin` dumps into `<Cemu data>/emulatedUSBDevices/skylanders/`.
+2. Add figures. The quickest way is **Settings → Emulated USB Devices → Create all Skylanders
+   figures**, which creates one version of every Skylander you don't have yet. **Create all
+   variants too** also adds every Series 2, Legendary and other variant. You can also create
+   single figures from the in-game menu, or copy `.sky`/`.bin` dumps into
+   `<Cemu data>/emulatedUSBDevices/skylanders/`.
 3. Start a Skylanders game. As soon as the game starts talking to the portal (usually by the title
    screen), the portal opens on the second display. Other games leave the second display alone, so
    **External PAD screen** keeps working for them.
@@ -20,6 +23,12 @@ It installs as a separate app: `applicationId` is `info.cemu.cemu.portal` and th
 
 ### Portal screen
 
+- **Portal ring:** the slots sit on a drawn portal whose ring takes the colours the game sets on
+  the portal's lights, the way a real portal lights up. It flashes when figures go on or come off.
+  It doesn't animate otherwise, so it doesn't slow the game down.
+- **Teams:** the teams button shows your saved teams. **+ Save team** saves the figures currently
+  on the portal. Tap a team to swap it onto the portal. Long-press a team, then tap it again, to
+  delete it.
 - **Slots:** Player 1, Player 2, Trap and Magic Item are always shown. **More** shows the other
   twelve, with a count of any that are in use.
 - **Automatic slots:** traps always go to the Trap slot, and magic items and trophies to the Magic
@@ -48,6 +57,11 @@ figures. Each image can be named after the figure file or after the figure's nam
 ```
 
 Figures without an image get a card in their element's colour, showing their initials.
+
+**Settings → Emulated USB Devices** can import images for you, either from a `.zip` or as
+individual images. Folders inside the zip are ignored. **Missing card art** lists the image names
+still needed, one per figure, and one image covers every variant of that figure. Image names are
+not case-sensitive.
 
 The element, game and type of each figure come from the Skylanders figure list in Dolphin
 (GPL-2.0-or-later). See `SkylanderCatalog.kt`.
