@@ -60,20 +60,27 @@ Turn it off to give the second display back to the GamePad (**External PAD scree
 
 ### Card art
 
-No artwork is bundled. To show your own pictures, add images to an `art` folder next to the
-figures. Each image can be named after the figure file or after the figure's name, so one
-`Spyro.png` is used for every Spyro file:
+Art for about 700 figures and variants is bundled in `app/src/main/assets/skylanders_art/` (8 MB
+of 256 px WebP images, taken from skylanderscharacterlist.com). Each file is named after the
+figure's id and variant in 4-digit hex, as read from the figure file: `0010_0000.webp` is Spyro.
+Both Cemu's and Dolphin's variant codes are covered, because they differ for some figures. The
+scripts that built the set, and a manifest of which figure each file is, live outside the repo in
+`SkylandersArt/` on the dev machine.
+
+To use your own pictures, add images to an `art` folder next to the figures. They win over the
+bundled art. Each image can be named after the figure file, the figure's name, its id and variant
+(`0010_0000.png`) or its base figure's name, so one `Spyro.png` is used for every Spyro file:
 
 ```
 <Cemu data>/emulatedUSBDevices/skylanders/Spyro.sky
 <Cemu data>/emulatedUSBDevices/skylanders/art/Spyro.png   (png, jpg, jpeg or webp)
 ```
 
-Figures without an image get a card in their element's colour, showing their initials.
+Figures with no art at all get a card in their element's colour, showing their initials.
 
 **Settings → Emulated USB Devices** can import images for you, either from a `.zip` or as
 individual images. Folders inside the zip are ignored. **Missing card art** lists the image names
-still needed, one per figure, and one image covers every variant of that figure. Image names are
+still needed for figures with no bundled art, one per figure, and one image covers every variant of that figure. Image names are
 not case-sensitive.
 
 The element, game and type of each figure come from the Skylanders figure list in Dolphin

@@ -1,5 +1,6 @@
 package info.cemu.cemu.emulation.emulatedusbdevices
 
+import android.content.res.AssetManager
 import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -7,6 +8,7 @@ import info.cemu.cemu.nativeinterface.NativeActiveSettings
 import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices
 import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices.InstalledFigure
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.io.RandomAccessFile
 import java.util.zip.ZipInputStream
@@ -49,8 +51,15 @@ data class PortalFigure(
     val element: SkylanderElement get() = info?.element ?: SkylanderElement.OTHER
     val showsFileName: Boolean get() = !installed.name.startsWith(name, ignoreCase = true)
 
+    /**
+     * The figure's id and variant as 4-digit hex, e.g. "0010_0000" for Spyro. Names the bundled art
+     * and can also name images in the art folder.
+     */
+    val artKey: String?
+        get() = idAndVariant?.let { (id, variant) -> "%04X_%04X".format(id, variant) }
+
     /** Names an image in the art folder can have to be used for this figure, most specific first. */
-    val artNames: List<String> get() = listOfNotNull(installed.name, name, baseName).distinct()
+    val artNames: List<String> get() = listOfNotNull(installed.name, name, artKey, baseName).distinct()
 
     /** The simplest image name that covers this figure and all its variants. */
     val suggestedArtName: String get() = baseName ?: name
@@ -159,6 +168,23 @@ fun loadSkylanderArtIndex(artDir: File = skylanderArtDirectory()): Map<String, F
 
 fun Map<String, File>.findArt(figure: PortalFigure): File? =
     figure.artNames.firstNotNullOfOrNull { this[it.lowercase()] }
+
+/** App assets folder with the bundled card art, one `<id>_<variant>.webp` per figure. */
+private const val BUNDLED_ART_DIR = "skylanders_art"
+
+/** The [PortalFigure.artKey]s that have bundled art. Does IO. */
+fun loadBundledSkylanderArtKeys(assets: AssetManager): Set<String> =
+    assets.list(BUNDLED_ART_DIR).orEmpty().map { it.substringBeforeLast('.') }.toSet()
+
+/** Decodes the bundled art for [figure], or returns null if there is none. Does IO. */
+fun decodeBundledSkylanderArt(assets: AssetManager, figure: PortalFigure): ImageBitmap? {
+    val key = figure.artKey ?: return null
+    return try {
+        assets.open("$BUNDLED_ART_DIR/$key.webp").use(BitmapFactory::decodeStream)?.asImageBitmap()
+    } catch (_: IOException) {
+        null
+    }
+}
 
 fun decodeSkylanderArt(file: File): ImageBitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

@@ -1,6 +1,7 @@
 package info.cemu.cemu.settings.emulatedusbdevices
 
 import android.content.Context
+import android.content.res.AssetManager
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.widget.Toast
@@ -31,6 +32,7 @@ import info.cemu.cemu.emulation.emulatedusbdevices.createMissingSkylanderFigures
 import info.cemu.cemu.emulation.emulatedusbdevices.findArt
 import info.cemu.cemu.emulation.emulatedusbdevices.importSkylanderArt
 import info.cemu.cemu.emulation.emulatedusbdevices.importSkylanderArtZip
+import info.cemu.cemu.emulation.emulatedusbdevices.loadBundledSkylanderArtKeys
 import info.cemu.cemu.emulation.emulatedusbdevices.loadPortalFigures
 import info.cemu.cemu.emulation.emulatedusbdevices.loadSkylanderArtIndex
 import info.cemu.cemu.emulation.emulatedusbdevices.skylanderFigureNames
@@ -70,14 +72,15 @@ fun EmulatedUSBDevicesSettingsScreen(navigateBack: () -> Unit) {
 
 private data class ArtStatus(val figureCount: Int, val missingArtNames: List<String>)
 
-private fun loadArtStatus(): ArtStatus {
+private fun loadArtStatus(assets: AssetManager): ArtStatus {
     val figures = loadPortalFigures(
         NativeEmulatedUSBDevices.getInstalledSkylanderFigures(),
         skylanderFigureNames(),
     )
     val artIndex = loadSkylanderArtIndex()
+    val bundledArtKeys = loadBundledSkylanderArtKeys(assets)
     val missing = figures
-        .filter { artIndex.findArt(it) == null }
+        .filter { artIndex.findArt(it) == null && it.artKey !in bundledArtKeys }
         .map { it.suggestedArtName }
         .distinct()
         .sortedBy { it.lowercase() }
@@ -99,7 +102,7 @@ private fun SkylanderFiguresSection() {
     var showMissing by remember { mutableStateOf(false) }
 
     LaunchedEffect(statusVersion) {
-        artStatus = withContext(Dispatchers.IO) { runCatching { loadArtStatus() }.getOrNull() }
+        artStatus = withContext(Dispatchers.IO) { runCatching { loadArtStatus(context.assets) }.getOrNull() }
     }
 
     fun runBusy(work: suspend () -> String) {

@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -93,7 +94,8 @@ import java.io.File
  *
  * Figures are shown with the name, element, game and type stored in the figure file (see
  * [SkylanderCatalog]). Card art is read from `<figures dir>/art/<file name or figure name>.png`
- * (or jpg/jpeg/webp) when present, with a generated placeholder otherwise. No artwork is bundled.
+ * (or jpg/jpeg/webp) when present, then from the art bundled in the `skylanders_art` assets, with a
+ * generated placeholder otherwise.
  *
  * Runs in a non-focusable window (see [SkylanderPortalPresentation]), so it deliberately avoids
  * dialogs, popups and text input.
@@ -813,9 +815,18 @@ private enum class VersionFilter(val label: String) {
 
 @Composable
 private fun FigureArt(figure: PortalFigure, artFile: File?, modifier: Modifier) {
-    val art by produceState<ImageBitmap?>(initialValue = null, artFile?.path, artFile?.lastModified()) {
-        value = artFile?.let { file ->
-            withContext(Dispatchers.IO) { runCatching { decodeSkylanderArt(file) }.getOrNull() }
+    val assets = LocalContext.current.assets
+    val art by produceState<ImageBitmap?>(
+        initialValue = null,
+        artFile?.path,
+        artFile?.lastModified(),
+        figure.artKey,
+    ) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                // Images in the art folder win over the bundled art.
+                artFile?.let(::decodeSkylanderArt) ?: decodeBundledSkylanderArt(assets, figure)
+            }.getOrNull()
         }
     }
 
