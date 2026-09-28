@@ -58,7 +58,7 @@ The APK builds on GitHub Actions (`.github/workflows/thor_portal_apk.yml`; downl
 - [x] The branch builds.
 - [x] The portal appears on the Thor's bottom screen while a game runs.
 - [x] Placing figures from the portal works.
-- [ ] Swapping works: tap a different figure while a slot is occupied.
-- [ ] Controller input still reaches the game while you touch the portal, and emulation does not
+- [x] Swapping works: tap a different figure while a slot is occupied.
+- [x] Controller input still reaches the game while you touch the portal, and emulation does not
       stutter or pause.
-- [ ] Quitting the game closes the portal.
+- [x] Quitting the game closes the portal.
