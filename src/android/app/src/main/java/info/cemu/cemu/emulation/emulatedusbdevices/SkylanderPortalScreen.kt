@@ -149,6 +149,7 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
     var typeFilter by rememberSaveable { mutableStateOf<SkylanderType?>(null) }
     var elementFilter by rememberSaveable { mutableStateOf<SkylanderElement?>(null) }
     var gameFilter by rememberSaveable { mutableStateOf<SkylanderGame?>(null) }
+    var versionFilter by rememberSaveable { mutableStateOf(VersionFilter.MAIN) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val names = remember { skylanderFigureNames() }
@@ -159,14 +160,20 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
         value = withContext(Dispatchers.IO) { runCatching { loadSkylanderArtIndex() }.getOrDefault(emptyMap()) }
     }
     val figuresByPath = remember(figures) { figures.associateBy { it.installed.path } }
-    val filteredFigures = remember(figures, typeFilter, elementFilter, gameFilter) {
+    val filteredFigures = remember(figures, typeFilter, elementFilter, gameFilter, versionFilter) {
         figures.filter { figure ->
             (typeFilter == null || figure.info?.type == typeFilter) &&
                 (elementFilter == null || figure.element == elementFilter) &&
-                (gameFilter == null || figure.info?.game == gameFilter)
+                (gameFilter == null || figure.info?.game == gameFilter) &&
+                when (versionFilter) {
+                    VersionFilter.MAIN -> figure.isMainVersion
+                    VersionFilter.VARIANTS -> !figure.isMainVersion
+                    VersionFilter.ALL -> true
+                }
         }
     }
-    val isFiltered = typeFilter != null || elementFilter != null || gameFilter != null
+    val isFiltered = typeFilter != null || elementFilter != null || gameFilter != null ||
+        versionFilter != VersionFilter.MAIN
 
     LaunchedEffect(Unit) {
         // Figures may have been created or deleted since the view model was first used.
@@ -281,6 +288,7 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
         }
 
         if (showFilters) {
+            VersionChips(selected = versionFilter, onSelectedChange = { versionFilter = it })
             FilterRows(
                 figures = figures,
                 typeFilter = typeFilter,
@@ -668,7 +676,30 @@ private fun figureSubtitle(figure: PortalFigure): String {
         SkylanderType.SKYLANDER, SkylanderType.UNKNOWN -> null
         else -> tr(info.type.label)
     }
-    return listOfNotNull(tr(info.element.label), type).joinToString(" · ")
+    val series = figure.series?.let { tr("Series {0}", it) }
+    val variant = if (figure.isMainVersion) null else tr("Variant")
+    return listOfNotNull(tr(info.element.label), type, series, variant).joinToString(" · ")
+}
+
+@Composable
+private fun VersionChips(selected: VersionFilter, onSelectedChange: (VersionFilter) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(VersionFilter.entries) { option ->
+            FilterChip(
+                selected = option == selected,
+                onClick = { onSelectedChange(option) },
+                label = { Text(tr(option.label)) },
+                colors = portalChipColors(),
+            )
+        }
+    }
+}
+
+/** Which versions of the figures the grid shows (see [SkylanderVersions]). */
+private enum class VersionFilter(val label: String) {
+    MAIN("Main roster"),
+    VARIANTS("Variants"),
+    ALL("All versions"),
 }
 
 @Composable

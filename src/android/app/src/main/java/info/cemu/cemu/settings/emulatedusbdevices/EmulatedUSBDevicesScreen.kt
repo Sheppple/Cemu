@@ -156,14 +156,14 @@ private fun SkylanderFiguresSection() {
 
     Button(
         label = tr("Create all Skylanders figures"),
-        description = tr("Creates a figure file for every Skylander you don't have yet, one version of each."),
+        description = tr("Creates one figure per character from its latest Series (S4 > S3 > S2 > S1), plus every trap and magic item. Eon's Elite, Legendary, Dark, LightCore and other variants are left out."),
         enabled = !isBusy,
         onClick = { createAll(allVariants = false) },
     )
 
     Button(
         label = tr("Create all variants too"),
-        description = tr("Also creates every Series 2, Legendary, Dark and other variant. This adds a few hundred figures."),
+        description = tr("Also creates every earlier Series, Eon's Elite, Legendary, Dark, LightCore and other variant. On the portal they appear under the Variants filter."),
         enabled = !isBusy,
         onClick = { createAll(allVariants = true) },
     )

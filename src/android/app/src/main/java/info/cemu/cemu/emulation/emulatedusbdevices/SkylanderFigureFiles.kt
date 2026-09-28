@@ -21,6 +21,13 @@ data class PortalFigure(
     val info: SkylanderInfo?,
     /** The figure's id and variant as stored in the file, or null if the file can't be read. */
     val idAndVariant: Pair<Int, Int>?,
+    /**
+     * Whether this figure is in the main roster: one entry per character, using its latest normal
+     * Series (see [SkylanderVersions]). Everything else is shown as a variant.
+     */
+    val isMainVersion: Boolean = true,
+    /** The Series number (1-4) of a normal character release, if known. */
+    val series: Int? = null,
 ) {
     val element: SkylanderElement get() = info?.element ?: SkylanderElement.OTHER
     val showsFileName: Boolean get() = !installed.name.startsWith(name, ignoreCase = true)
@@ -47,8 +54,55 @@ fun skylanderFigureNames(): Map<Pair<Int, Int>, String> =
     NativeEmulatedUSBDevices.getSkylanderFigures()
         .associate { (it.id.toInt() to it.variant.toInt()) to it.name }
 
-/** Reads each figure file's id and variant, sorted by name. Does file IO. */
+/**
+ * Reads each figure file's id and variant, sorted by name, and marks which figures are in the main
+ * roster. Does file IO.
+ */
 fun loadPortalFigures(
+    installedFigures: Array<InstalledFigure>,
+    names: Map<Pair<Int, Int>, String>,
+): List<PortalFigure> = markMainVersions(readPortalFigures(installedFigures, names), names)
+
+/**
+ * For each character, keeps only the installed figure from its latest normal Series in the main
+ * roster, and marks everything else (earlier Series, Eon's Elite, Legendary, Dark, LightCore and
+ * other special editions) as a variant. Traps, items and other toys are never merged.
+ */
+private fun markMainVersions(
+    figures: List<PortalFigure>,
+    names: Map<Pair<Int, Int>, String>,
+): List<PortalFigure> {
+    val seriesNumbers = SkylanderVersions.seriesNumbers(names)
+    fun isNormal(figure: PortalFigure): Boolean {
+        val (_, variant) = figure.idAndVariant ?: return true
+        return SkylanderVersions.isNormalRelease(
+            variant,
+            figure.name,
+            isCharacter = SkylanderVersions.isCharacter(figure.info),
+        )
+    }
+
+    val mainCharacterPaths = figures
+        .filter { SkylanderVersions.isCharacter(it.info) && it.idAndVariant != null && isNormal(it) }
+        .groupBy { it.idAndVariant!!.first }
+        .map { (_, versions) -> versions.maxBy { SkylanderVersions.seriesRank(it.idAndVariant!!.second) } }
+        .map { it.installed.path }
+        .toSet()
+
+    return figures.map { figure ->
+        val isMain = if (SkylanderVersions.isCharacter(figure.info) && figure.idAndVariant != null) {
+            figure.installed.path in mainCharacterPaths
+        } else {
+            isNormal(figure)
+        }
+        figure.copy(
+            isMainVersion = isMain,
+            series = figure.idAndVariant?.let { seriesNumbers[it] },
+        )
+    }
+}
+
+private fun readPortalFigures(
     installedFigures: Array<InstalledFigure>,
     names: Map<Pair<Int, Int>, String>,
 ): List<PortalFigure> = installedFigures.map { installed ->
@@ -148,29 +202,22 @@ fun importSkylanderArtZip(zip: InputStream, artDir: File = skylanderArtDirectory
 
 /**
  * Creates a figure file for every Skylander in Cemu's list that isn't installed yet, matching
- * installed figures by the id and variant stored in them. With [allVariants] false, only the first
- * variant of each figure is created. Calls [onProgress] with (done, total). Returns how many were
- * created. Does file IO.
+ * installed figures by the id and variant stored in them. With [allVariants] false, only the main
+ * roster is created (see [SkylanderVersions.mainVersions]): one figure per character from its
+ * latest normal Series, plus every normal trap, item and other toy. Calls [onProgress] with
+ * (done, total). Returns how many were created. Does file IO.
  */
 fun createMissingSkylanderFigures(
     allVariants: Boolean,
     onProgress: (Int, Int) -> Unit = { _, _ -> },
 ): Int {
-    val installed = loadPortalFigures(
+    val installed = readPortalFigures(
         NativeEmulatedUSBDevices.getInstalledSkylanderFigures(),
         emptyMap(),
     ).mapNotNull { it.idAndVariant }.toSet()
-    val installedIds = installed.map { it.first }.toSet()
-    val figures = NativeEmulatedUSBDevices.getSkylanderFigures()
-        .map { it.id.toInt() to it.variant.toInt() }
-        .distinct()
-    val wanted = if (allVariants) {
-        figures.filter { it !in installed }
-    } else {
-        figures.groupBy { it.first }
-            .filterKeys { it !in installedIds }
-            .map { (_, variants) -> variants.minBy { it.second } }
-    }
+    val names = skylanderFigureNames()
+    val candidates = if (allVariants) names.keys.toList() else SkylanderVersions.mainVersions(names)
+    val wanted = candidates.filter { it !in installed }.sortedWith(compareBy({ it.first }, { it.second }))
     var created = 0
     wanted.forEachIndexed { index, (id, variant) ->
         if (NativeEmulatedUSBDevices.createSkylanderFigure(id, variant)) {

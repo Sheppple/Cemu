@@ -10,10 +10,9 @@ It installs as a separate app: `applicationId` is `info.cemu.cemu.portal` and th
 
 1. In Cemu's settings, enable **Emulated USB Devices → Emulate Skylander Portal**.
 2. Add figures. The quickest way is **Settings → Emulated USB Devices → Create all Skylanders
-   figures**, which creates one version of every Skylander you don't have yet. **Create all
-   variants too** also adds every Series 2, Legendary and other variant. You can also create
-   single figures from the in-game menu, or copy `.sky`/`.bin` dumps into
-   `<Cemu data>/emulatedUSBDevices/skylanders/`.
+   figures**, which creates the main roster (see below). **Create all variants too** also adds
+   every earlier Series and special edition. You can also create single figures from the in-game
+   menu, or copy `.sky`/`.bin` dumps into `<Cemu data>/emulatedUSBDevices/skylanders/`.
 3. Start a Skylanders game. As soon as the game starts talking to the portal (usually by the title
    screen), the portal opens on the second display. Other games leave the second display alone, so
    **External PAD screen** keeps working for them.
@@ -37,6 +36,12 @@ It installs as a separate app: `applicationId` is `info.cemu.cemu.portal` and th
 - **Names and elements:** each card shows the figure's real name, read from the figure file, and
   is coloured by its element. When the file name is different from the figure's name, the file name
   is shown underneath.
+- **Main roster:** the grid shows one entry per character, using its latest normal Series:
+  S4 > S3 > S2 > S1. Eon's Elite never counts as the main version, because its stats are much
+  stronger than the normal releases. Earlier Series, Eon's Elite, Legendary, Dark, LightCore,
+  Chase, Holiday and other special editions are variants, and appear under **Variants** or **All
+  versions** in the filters. Traps, magic items and vehicles are never merged, because different
+  traps share one figure id. Cards show the Series number. The rules are in `SkylanderVersions.kt`.
 - **Filters:** the filter button shows rows of chips for type (Traps, Vehicles, Giants, Swappers…),
   element and game. Only filters that match at least one of your figures are shown.
 - **Theme:** black background with gold highlights, to suit the AMOLED bottom screen.
