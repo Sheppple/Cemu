@@ -218,35 +218,35 @@ object SkylanderCatalog {
 
     /**
      * Imaginators Senseis, Villain Senseis and the Crash Bandicoot figures, which Dolphin's list
-     * does not include. Figures whose element hasn't been confirmed yet are OTHER.
+     * does not include.
      */
     private val IMAGINATORS_ELEMENTS: Map<Int, SkylanderElement> = mapOf(
         601 to SkylanderElement.WATER, // King Pen
         602 to SkylanderElement.EARTH, // Tri-Tip
         603 to SkylanderElement.UNDEAD, // Chopscotch
         604 to SkylanderElement.LIFE, // Boom Bloom
-        605 to SkylanderElement.OTHER, // Pit Boss: unconfirmed
+        605 to SkylanderElement.UNDEAD, // Pit Boss
         606 to SkylanderElement.EARTH, // Barbella
         607 to SkylanderElement.AIR, // Air Strike
         608 to SkylanderElement.FIRE, // Ember
         609 to SkylanderElement.LIFE, // Ambush
         610 to SkylanderElement.TECH, // Dr. Krankcase
-        611 to SkylanderElement.UNDEAD, // Hood Sickle
-        612 to SkylanderElement.OTHER, // Tae Kwon Crow: unconfirmed
+        611 to SkylanderElement.DARK, // Hood Sickle
+        612 to SkylanderElement.FIRE, // Tae Kwon Crow
         613 to SkylanderElement.EARTH, // Golden Queen
         614 to SkylanderElement.UNDEAD, // Wolfgang
         615 to SkylanderElement.MAGIC, // Pain-Yatta
         616 to SkylanderElement.MAGIC, // Mysticat
-        617 to SkylanderElement.OTHER, // Starcast: unconfirmed
-        618 to SkylanderElement.OTHER, // Buckshot: unconfirmed
+        617 to SkylanderElement.DARK, // Starcast
+        618 to SkylanderElement.MAGIC, // Buckshot
         619 to SkylanderElement.LIGHT, // Aurora
         620 to SkylanderElement.FIRE, // Flare Wolf
         621 to SkylanderElement.LIFE, // Chompy Mage
         622 to SkylanderElement.AIR, // Bad Juju
-        623 to SkylanderElement.DARK, // Grave Clobber
+        623 to SkylanderElement.WATER, // Grave Clobber
         624 to SkylanderElement.LIGHT, // Blaster-Tron
-        625 to SkylanderElement.OTHER, // Ro-Bow: unconfirmed
-        626 to SkylanderElement.OTHER, // Chain Reaction: unconfirmed
+        625 to SkylanderElement.TECH, // Ro-Bow
+        626 to SkylanderElement.TECH, // Chain Reaction
         627 to SkylanderElement.KAOS, // Kaos
         628 to SkylanderElement.AIR, // Wild Storm
         629 to SkylanderElement.WATER, // Tidepool
