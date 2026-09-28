@@ -45,7 +45,9 @@ android {
     compileSdk = 36
     ndkVersion = "29.0.14206865"
     defaultConfig {
-        applicationId = "info.cemu.cemu.portal"
+        // Uses Cemu's own application id so frontends such as Cocoon, which recognise emulators by
+        // package name, treat this build as Cemu. It therefore replaces a regular Cemu install.
+        applicationId = "info.cemu.cemu"
         minSdk = 30
         targetSdk = 35
         versionName = getVersionName()

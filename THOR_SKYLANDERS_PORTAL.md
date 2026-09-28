@@ -3,8 +3,11 @@
 This branch builds on `android-port-dual` and adds a touch Skylanders portal that runs on the
 handheld's second display (the Thor's bottom screen) while the game runs on the main one.
 
-It installs as a separate app: `applicationId` is `info.cemu.cemu.portal` and the launcher name is
-"Cemu Portal", so it can sit next to another Cemu Android build.
+It uses Cemu's own application id, `info.cemu.cemu`, so frontends that recognise emulators by
+package name, such as Cocoon, treat it as Cemu. The launcher name is "Cemu Portal". Because the id is
+shared, it replaces a regular Cemu install, and the two can't be installed together. The official
+APK is signed with a different key, so uninstall regular Cemu first (after backing up its data),
+then install this build.
 
 ## Using it
 
