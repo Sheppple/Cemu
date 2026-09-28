@@ -5,8 +5,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import info.cemu.cemu.common.coroutines.RefreshableStateFlow
 import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed class UsbDeviceEvent {
@@ -60,9 +64,54 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
         infinitySlots.refresh()
     }
 
+    // Paths of the figure files loaded into each Skylander slot, so the portal screen can tell which
+    // installed figures are on the portal (the native side only reports the figure's name).
+    private val _skylanderSlotPaths =
+        MutableStateFlow(arrayOfNulls<String>(NativeEmulatedUSBDevices.MAX_SKYLANDERS).toList())
+    val skylanderSlotPaths = _skylanderSlotPaths.asStateFlow()
+
+    private fun setSkylanderSlotPath(slot: Int, path: String?) =
+        _skylanderSlotPaths.update { paths -> paths.toMutableList().also { it[slot] = path } }
+
+    private val _isSwappingSkylander = MutableStateFlow(false)
+    val isSwappingSkylander = _isSwappingSkylander.asStateFlow()
+
     fun clearSkylandersFigure(slot: Int) {
         NativeEmulatedUSBDevices.clearSkylandersFigure(slot)
+        setSkylanderSlotPath(slot, null)
         skylanderSlots.refresh()
+    }
+
+    fun clearAllSkylanderFigures() {
+        for (slot in 0..<NativeEmulatedUSBDevices.MAX_SKYLANDERS) {
+            if (skylanderSlots.state.value[slot] != null) {
+                clearSkylandersFigure(slot)
+            }
+        }
+    }
+
+    /**
+     * Puts [figure] into [slot]. If the slot is already occupied the old figure is removed first and
+     * the new one is placed after a short delay, since some games miss an instant swap.
+     */
+    fun placeSkylanderFigure(figure: NativeEmulatedUSBDevices.InstalledFigure, slot: Int) {
+        if (_isSwappingSkylander.value) {
+            return
+        }
+        if (skylanderSlots.state.value[slot] == null) {
+            loadSkylanderFigure(figure, slot)
+            return
+        }
+        _isSwappingSkylander.value = true
+        viewModelScope.launch {
+            try {
+                clearSkylandersFigure(slot)
+                delay(SKYLANDER_SWAP_DELAY_MS)
+                loadSkylanderFigure(figure, slot)
+            } finally {
+                _isSwappingSkylander.value = false
+            }
+        }
     }
 
     val installedSkylanderFigures =
@@ -119,6 +168,7 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
             emitEvent(UsbDeviceEvent.LoadFailed)
             return
         }
+        setSkylanderSlotPath(slot, figure.path)
         skylanderSlots.refresh()
     }
 
@@ -149,5 +199,9 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
     fun moveDimensionsFigure(pad: Int, index: Int, oldPad: Int, oldIndex: Int) {
         NativeEmulatedUSBDevices.moveDimensionsFigure(pad, index, oldPad, oldIndex)
         dimensionsSlots.refresh()
+    }
+
+    companion object {
+        const val SKYLANDER_SWAP_DELAY_MS = 500L
     }
 }

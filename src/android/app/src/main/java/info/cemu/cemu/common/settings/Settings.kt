@@ -17,6 +17,7 @@ data class EmulationSettings(
     val isPadVisible: Boolean = false,
     val isPadOnExternalDisplay: Boolean = false,
     val isExternalScreenRotatedLeft: Boolean = false,
+    val isSkylanderPortalOnExternalDisplay: Boolean = true,
 )
 
 @Serializable

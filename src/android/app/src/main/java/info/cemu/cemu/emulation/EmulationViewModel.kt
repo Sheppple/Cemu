@@ -40,6 +40,7 @@ data class SideMenuState(
     val isPadOnExternalDisplay: Boolean = false,
     val areScreensSwapped: Boolean = false,
     val isExternalScreenRotatedLeft: Boolean = false,
+    val isSkylanderPortalOnExternalDisplay: Boolean = true,
     val isInputOverlayVisible: Boolean = false,
 )
 
@@ -106,6 +107,7 @@ class EmulationViewModel(
                     isPadVisible = settings.emulationSettings.isPadVisible,
                     isPadOnExternalDisplay = settings.emulationSettings.isPadOnExternalDisplay,
                     isExternalScreenRotatedLeft = settings.emulationSettings.isExternalScreenRotatedLeft,
+                    isSkylanderPortalOnExternalDisplay = settings.emulationSettings.isSkylanderPortalOnExternalDisplay,
                     isInputOverlayVisible = settings.inputOverlaySettings.isOverlayEnabled,
                 )
             }
@@ -146,7 +148,8 @@ class EmulationViewModel(
 
         if (oldState.isPadVisible != sideMenuState.isPadVisible ||
             oldState.isPadOnExternalDisplay != sideMenuState.isPadOnExternalDisplay ||
-            oldState.isExternalScreenRotatedLeft != sideMenuState.isExternalScreenRotatedLeft
+            oldState.isExternalScreenRotatedLeft != sideMenuState.isExternalScreenRotatedLeft ||
+            oldState.isSkylanderPortalOnExternalDisplay != sideMenuState.isSkylanderPortalOnExternalDisplay
         ) {
             viewModelScope.launch {
                 dataStore.updateData {
@@ -155,6 +158,7 @@ class EmulationViewModel(
                             isPadVisible = sideMenuState.isPadVisible,
                             isPadOnExternalDisplay = sideMenuState.isPadOnExternalDisplay,
                             isExternalScreenRotatedLeft = sideMenuState.isExternalScreenRotatedLeft,
+                            isSkylanderPortalOnExternalDisplay = sideMenuState.isSkylanderPortalOnExternalDisplay,
                         )
                     )
                 }

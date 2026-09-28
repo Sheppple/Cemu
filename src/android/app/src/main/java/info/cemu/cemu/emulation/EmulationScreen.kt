@@ -7,6 +7,7 @@ import android.hardware.display.DisplayManager
 import android.view.Display
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -66,8 +67,12 @@ import info.cemu.cemu.common.android.display.DisplayUtils
 import info.cemu.cemu.common.settings.GamePadPosition
 import info.cemu.cemu.common.settings.HotkeyAction
 import info.cemu.cemu.common.ui.extensions.showMessage
+import info.cemu.cemu.common.ui.components.ActivityContent
+import info.cemu.cemu.common.ui.localization.TranslatableContent
 import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.emulation.emulatedusbdevices.EmulatedUSBDevicesDialog
+import info.cemu.cemu.emulation.emulatedusbdevices.SkylanderPortalPresentation
+import info.cemu.cemu.emulation.emulatedusbdevices.SkylanderPortalScreen
 import info.cemu.cemu.emulation.input.HotkeyManager
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurface
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView
@@ -75,6 +80,7 @@ import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.D
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.EDIT_POSITION
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.EDIT_SIZE
 import info.cemu.cemu.nativeinterface.NativeEmulation
+import info.cemu.cemu.nativeinterface.NativeSettings
 import kotlinx.coroutines.launch
 
 @Composable
@@ -324,7 +330,15 @@ private fun EmulationSideMenuContent(
         label = tr("External PAD screen"),
         checked = sideMenuState.isPadOnExternalDisplay,
         onCheckedChange = { updateState(sideMenuState.copy(isPadOnExternalDisplay = it)) },
-        enabled = sideMenuState.isPadVisible,
+        enabled = sideMenuState.isPadVisible && !sideMenuState.isSkylanderPortalOnExternalDisplay,
+    )
+
+    val isSkylanderPortalEmulated = remember { NativeSettings.isEmulateSkylanderPortalEnabled() }
+    CheckboxItem(
+        label = tr("Skylanders portal on external screen"),
+        checked = sideMenuState.isSkylanderPortalOnExternalDisplay,
+        onCheckedChange = { updateState(sideMenuState.copy(isSkylanderPortalOnExternalDisplay = it)) },
+        enabled = isSkylanderPortalEmulated,
     )
 
     CheckboxItem(
@@ -435,8 +449,16 @@ private fun EmulationSurfaces(
 
     val padDisplay = if (activity != null) rememberPadDisplay(activity) else null
     val isPadVisibleEffective = sideMenuState.isPadVisible && isEmulationInitialized
-    val usePadPresentation =
-        isPadVisibleEffective && sideMenuState.isPadOnExternalDisplay && padDisplay != null
+    val isSkylanderPortalEmulated = remember { NativeSettings.isEmulateSkylanderPortalEnabled() }
+    // The Skylanders portal takes over the external display; the PAD then falls back to the main one.
+    val useSkylanderPortalPresentation = isEmulationInitialized &&
+        isSkylanderPortalEmulated &&
+        sideMenuState.isSkylanderPortalOnExternalDisplay &&
+        padDisplay != null
+    val usePadPresentation = isPadVisibleEffective &&
+        sideMenuState.isPadOnExternalDisplay &&
+        padDisplay != null &&
+        !useSkylanderPortalPresentation
 
     val mainTouchListener = remember { CanvasOnTouchListener() }
     val padTouchListener = remember { CanvasOnTouchListener() }
@@ -481,6 +503,26 @@ private fun EmulationSurfaces(
         padPresentation.show()
 
         onDispose { padPresentation.dismiss() }
+    }
+
+    DisposableEffect(activity, padDisplay, useSkylanderPortalPresentation) {
+        val componentActivity = activity as? ComponentActivity
+        val display = padDisplay
+        if (componentActivity == null || display == null || !useSkylanderPortalPresentation) {
+            return@DisposableEffect onDispose {}
+        }
+
+        val portalPresentation = SkylanderPortalPresentation(componentActivity, display) {
+            TranslatableContent {
+                ActivityContent {
+                    SkylanderPortalScreen()
+                }
+            }
+        }
+
+        portalPresentation.show()
+
+        onDispose { portalPresentation.dismiss() }
     }
 
     LinearLayout(currentGamePadPosition) { itemModifier ->
