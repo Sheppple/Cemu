@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <mutex>
 
 #include "nsyshid.h"
@@ -92,6 +93,12 @@ namespace nsyshid
 		static std::map<const std::pair<const uint16, const uint16>, const char*> GetListSkylanders();
 		std::string FindSkylander(uint16 skyId, uint16 skyVar);
 
+		// True once the running game has sent any command to the portal, i.e. the game uses it.
+		bool IsInUseByGame() const
+		{
+			return m_inUseByGame;
+		}
+
 	  protected:
 		std::mutex m_skyMutex;
 		std::mutex m_queryMutex;
@@ -100,6 +107,7 @@ namespace nsyshid
 	  private:
 		std::queue<std::array<uint8, 64>> m_queries;
 		bool m_activated = true;
+		std::atomic<bool> m_inUseByGame = false;
 		uint8 m_interruptCounter = 0;
 		SkylanderLEDColor m_colorRight = {};
 		SkylanderLEDColor m_colorLeft = {};

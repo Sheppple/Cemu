@@ -79,6 +79,10 @@ object NativeEmulatedUSBDevices {
     @JvmStatic
     external fun getSkylandersFigureSlot(slot: Int): String?
 
+    /** Whether the running game has talked to the emulated Skylanders portal. */
+    @JvmStatic
+    external fun isSkylanderPortalInUse(): Boolean
+
     @JvmStatic
     external fun getInfinityFigureSlot(slot: Int): String?
 

@@ -307,6 +307,12 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulatedUSBDevices_loadSkylandersFigur
 	});
 }
 
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulatedUSBDevices_isSkylanderPortalInUse([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return nsyshid::g_skyportal.IsInUseByGame();
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulatedUSBDevices_getSkylandersFigureSlot(JNIEnv* env, [[maybe_unused]] jclass clazz, jint slot)
 {

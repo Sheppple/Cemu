@@ -11,30 +11,46 @@ It installs as a separate app: `applicationId` is `info.cemu.cemu.portal` and th
 1. In Cemu's settings, enable **Emulated USB Devices → Emulate Skylander Portal**.
 2. Create figures once, either from **Emulated USB Devices → Skylanders → Create** in the in-game
    menu, or by copying `.sky`/`.bin` dumps into `<Cemu data>/emulatedUSBDevices/skylanders/`.
-3. Start a Skylanders game. When emulation is running and a second display is present, the portal
-   opens on it automatically.
-4. Pick a slot at the top, then tap a figure to put it on that slot. If the slot already has a
+3. Start a Skylanders game. As soon as the game starts talking to the portal (usually by the title
+   screen), the portal opens on the second display. Other games leave the second display alone, so
+   **External PAD screen** keeps working for them.
+4. Select a slot at the top, then tap a figure to put it on that slot. If the slot already has a
    figure, the old one is removed and the new one goes on half a second later, because some games
-   miss an instant swap. Tap a highlighted figure (it shows its slot number) to take it off.
+   miss an instant swap. Tap a glowing figure to take it off.
+
+### Portal screen
+
+- **Slots:** Player 1, Player 2, Trap and Magic Item are always shown. **More** shows the other
+  twelve, with a count of any that are in use.
+- **Automatic slots:** traps always go to the Trap slot, and magic items and trophies to the Magic
+  Item slot. Swap Force halves go to the next free slot, so both halves can be on the portal
+  together. Everything else goes to the selected slot.
+- **Names and elements:** each card shows the figure's real name, read from the figure file, and
+  is coloured by its element. When the file name is different from the figure's name, the file name
+  is shown underneath.
+- **Filters:** the filter button shows rows of chips for type (Traps, Vehicles, Giants, Swappers…),
+  element and game. Only filters that match at least one of your figures are shown.
+- **Theme:** black background with gold highlights, to suit the AMOLED bottom screen.
 
 The in-game side menu has a **Skylanders portal on external screen** toggle. It is on by default.
 Turn it off to give the second display back to the GamePad (**External PAD screen**). The regular
 **Emulated USB Devices** dialog still works either way, and both views share the same state.
 
-Slots are generic, as in Cemu's own dialog. For Trap Team, put the trap on any free slot. For Swap
-Force, put the top and bottom halves on two slots.
-
 ### Card art
 
-No artwork is bundled. To show your own pictures, add an image named after the figure file to an
-`art` folder next to the figures:
+No artwork is bundled. To show your own pictures, add images to an `art` folder next to the
+figures. Each image can be named after the figure file or after the figure's name, so one
+`Spyro.png` is used for every Spyro file:
 
 ```
 <Cemu data>/emulatedUSBDevices/skylanders/Spyro.sky
 <Cemu data>/emulatedUSBDevices/skylanders/art/Spyro.png   (png, jpg, jpeg or webp)
 ```
 
-Figures without an image get a coloured card with their initials.
+Figures without an image get a card in their element's colour, showing their initials.
+
+The element, game and type of each figure come from the Skylanders figure list in Dolphin
+(GPL-2.0-or-later). See `SkylanderCatalog.kt`.
 
 ## How it works
 

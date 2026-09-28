@@ -79,8 +79,10 @@ import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.DEFAULT
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.EDIT_POSITION
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.EDIT_SIZE
+import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices
 import info.cemu.cemu.nativeinterface.NativeEmulation
 import info.cemu.cemu.nativeinterface.NativeSettings
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -450,11 +452,14 @@ private fun EmulationSurfaces(
     val padDisplay = if (activity != null) rememberPadDisplay(activity) else null
     val isPadVisibleEffective = sideMenuState.isPadVisible && isEmulationInitialized
     val isSkylanderPortalEmulated = remember { NativeSettings.isEmulateSkylanderPortalEnabled() }
-    // The Skylanders portal takes over the external display; the PAD then falls back to the main one.
-    val useSkylanderPortalPresentation = isEmulationInitialized &&
+    val wantsSkylanderPortal = isEmulationInitialized &&
         isSkylanderPortalEmulated &&
-        sideMenuState.isSkylanderPortalOnExternalDisplay &&
-        padDisplay != null
+        sideMenuState.isSkylanderPortalOnExternalDisplay
+    val isSkylanderPortalInUse = rememberIsSkylanderPortalInUse(enabled = wantsSkylanderPortal)
+    // Once the game uses the Skylanders portal, the portal takes over the external display and the
+    // PAD falls back to the main one. Other games keep the external display for the PAD.
+    val useSkylanderPortalPresentation =
+        wantsSkylanderPortal && isSkylanderPortalInUse && padDisplay != null
     val usePadPresentation = isPadVisibleEffective &&
         sideMenuState.isPadOnExternalDisplay &&
         padDisplay != null &&
@@ -625,6 +630,23 @@ private fun EmulationSurface(
             )
         },
     )
+}
+
+/** Polls whether the running game has started talking to the emulated Skylanders portal. */
+@Composable
+private fun rememberIsSkylanderPortalInUse(enabled: Boolean): Boolean {
+    var isInUse by remember { mutableStateOf(false) }
+
+    LaunchedEffect(enabled) {
+        while (enabled && !isInUse) {
+            isInUse = NativeEmulatedUSBDevices.isSkylanderPortalInUse()
+            if (!isInUse) {
+                delay(1000)
+            }
+        }
+    }
+
+    return isInUse
 }
 
 @Composable

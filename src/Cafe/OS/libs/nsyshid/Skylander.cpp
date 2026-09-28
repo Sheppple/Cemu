@@ -671,6 +671,7 @@ namespace nsyshid
 	void SkylanderUSB::ControlTransfer(uint8* buf, uint32 length)
 	{
 		std::array<uint8, 64> interruptResponse = {};
+		m_inUseByGame = true;
 		switch (buf[0])
 		{
 		case 'A':
