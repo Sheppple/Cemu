@@ -99,7 +99,10 @@ class EmulationActivity : AppCompatActivity() {
         var launchPath: String? = null
 
         if (extras != null) {
+            // Frontends written for the regular Cemu build send the extra under Cemu's own
+            // application id, so accept that too when this build has a different one.
             launchPath = extras.getString(EXTRA_LAUNCH_PATH)
+                ?: extras.getString(CEMU_EXTRA_LAUNCH_PATH)
         }
 
         if (launchPath == null && data != null) {
@@ -185,5 +188,6 @@ class EmulationActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_LAUNCH_PATH: String = BuildConfig.APPLICATION_ID + ".LaunchPath"
+        private const val CEMU_EXTRA_LAUNCH_PATH: String = "info.cemu.cemu.LaunchPath"
     }
 }
