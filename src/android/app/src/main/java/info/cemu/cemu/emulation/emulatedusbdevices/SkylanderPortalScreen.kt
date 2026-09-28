@@ -816,29 +816,44 @@ private enum class VersionFilter(val label: String) {
 @Composable
 private fun FigureArt(figure: PortalFigure, artFile: File?, modifier: Modifier) {
     val assets = LocalContext.current.assets
-    val art by produceState<ImageBitmap?>(
-        initialValue = null,
-        artFile?.path,
-        artFile?.lastModified(),
-        figure.artKey,
-    ) {
-        value = withContext(Dispatchers.IO) {
-            runCatching {
+    val cacheKey = skylanderArtCacheKey(figure, artFile)
+    // Start from the cache so cards scrolling back into view show their art straight away.
+    val art by produceState(cacheKey?.let(::cachedSkylanderArt), cacheKey) {
+        if (value == null && cacheKey != null) {
+            value = withContext(Dispatchers.IO) {
                 // Images in the art folder win over the bundled art.
-                artFile?.let(::decodeSkylanderArt) ?: decodeBundledSkylanderArt(assets, figure)
-            }.getOrNull()
+                runCatching { loadSkylanderArt(assets, figure, artFile) }.getOrNull()
+            }
         }
     }
 
     val shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
     val currentArt = art
     if (currentArt != null) {
-        Image(
-            bitmap = currentArt,
-            contentDescription = figure.name,
-            contentScale = ContentScale.Crop,
-            modifier = modifier.clip(shape),
-        )
+        // Figure renders are usually taller than wide, so show them whole on an element-coloured
+        // backdrop instead of cropping off heads and weapons.
+        Box(
+            modifier = modifier
+                .clip(shape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(
+                            figure.element.color.copy(alpha = 0.55f),
+                            lerp(figure.element.color, Color.Black, 0.85f),
+                        ),
+                    )
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                bitmap = currentArt,
+                contentDescription = figure.name,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(4.dp),
+            )
+        }
         return
     }
 

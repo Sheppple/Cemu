@@ -80,7 +80,13 @@ private fun loadArtStatus(assets: AssetManager): ArtStatus {
     val artIndex = loadSkylanderArtIndex()
     val bundledArtKeys = loadBundledSkylanderArtKeys(assets)
     val missing = figures
-        .filter { artIndex.findArt(it) == null && it.artKey !in bundledArtKeys }
+        .filter { figure ->
+            val key = figure.artKey
+            // Bundled art falls back to the base variant, so count that as covered too.
+            val hasBundledArt = key != null &&
+                (key in bundledArtKeys || key.substringBefore('_') + "_0000" in bundledArtKeys)
+            artIndex.findArt(figure) == null && !hasBundledArt
+        }
         .map { it.suggestedArtName }
         .distinct()
         .sortedBy { it.lowercase() }

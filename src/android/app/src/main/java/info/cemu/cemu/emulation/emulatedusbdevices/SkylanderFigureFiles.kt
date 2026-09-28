@@ -2,6 +2,7 @@ package info.cemu.cemu.emulation.emulatedusbdevices
 
 import android.content.res.AssetManager
 import android.graphics.BitmapFactory
+import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import info.cemu.cemu.nativeinterface.NativeActiveSettings
@@ -176,14 +177,40 @@ private const val BUNDLED_ART_DIR = "skylanders_art"
 fun loadBundledSkylanderArtKeys(assets: AssetManager): Set<String> =
     assets.list(BUNDLED_ART_DIR).orEmpty().map { it.substringBeforeLast('.') }.toSet()
 
-/** Decodes the bundled art for [figure], or returns null if there is none. Does IO. */
+/**
+ * Decodes the bundled art for [figure], or returns null if there is none. A variant that isn't
+ * bundled (for example from an unusual dump) falls back to the figure's base variant. Does IO.
+ */
 fun decodeBundledSkylanderArt(assets: AssetManager, figure: PortalFigure): ImageBitmap? {
     val key = figure.artKey ?: return null
-    return try {
-        assets.open("$BUNDLED_ART_DIR/$key.webp").use(BitmapFactory::decodeStream)?.asImageBitmap()
-    } catch (_: IOException) {
-        null
+    val baseKey = key.substringBefore('_') + "_0000"
+    return listOf(key, baseKey).distinct().firstNotNullOfOrNull { candidate ->
+        try {
+            assets.open("$BUNDLED_ART_DIR/$candidate.webp").use(BitmapFactory::decodeStream)?.asImageBitmap()
+        } catch (_: IOException) {
+            null
+        }
     }
+}
+
+/**
+ * Decoded card art, so cards scrolling back into view don't decode their image again. Holds about
+ * 64 images of 256 px (16 MB).
+ */
+private val artCache = LruCache<String, ImageBitmap>(64)
+
+/** The cache key for the art [figure] shows, from its art-folder image or the bundled art. */
+fun skylanderArtCacheKey(figure: PortalFigure, artFile: File?): String? =
+    artFile?.let { "file:${it.path}:${it.lastModified()}" } ?: figure.artKey?.let { "asset:$it" }
+
+fun cachedSkylanderArt(cacheKey: String): ImageBitmap? = artCache.get(cacheKey)
+
+/** Decodes the art [figure] shows: an art-folder image if there is one, else the bundled art. */
+fun loadSkylanderArt(assets: AssetManager, figure: PortalFigure, artFile: File?): ImageBitmap? {
+    val cacheKey = skylanderArtCacheKey(figure, artFile) ?: return null
+    artCache.get(cacheKey)?.let { return it }
+    val art = artFile?.let(::decodeSkylanderArt) ?: decodeBundledSkylanderArt(assets, figure)
+    return art?.also { artCache.put(cacheKey, it) }
 }
 
 fun decodeSkylanderArt(file: File): ImageBitmap? {
