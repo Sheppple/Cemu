@@ -8,6 +8,7 @@ enum class SkylanderGame(val label: String) {
     SWAP_FORCE("Swap Force"),
     TRAP_TEAM("Trap Team"),
     SUPERCHARGERS("SuperChargers"),
+    IMAGINATORS("Imaginators"),
 }
 
 enum class SkylanderElement(val label: String, val color: Color) {
@@ -22,6 +23,9 @@ enum class SkylanderElement(val label: String, val color: Color) {
     DARK("Dark", Color(0xFF5A4E7A)),
     LIGHT("Light", Color(0xFFF2D14B)),
     OTHER("Other", Color(0xFF6D6D6D)),
+
+    // Kept after OTHER so the indices used in SkylanderCatalog's table don't change.
+    KAOS("Kaos", Color(0xFF8E1B5C)),
 }
 
 enum class SkylanderType(val label: String) {
@@ -213,9 +217,49 @@ object SkylanderCatalog {
     private fun key(id: Int, variant: Int) = (id shl 16) or variant
 
     /**
+     * Imaginators Senseis, Villain Senseis and the Crash Bandicoot figures, which Dolphin's list
+     * does not include. Figures whose element hasn't been confirmed yet are OTHER.
+     */
+    private val IMAGINATORS_ELEMENTS: Map<Int, SkylanderElement> = mapOf(
+        601 to SkylanderElement.WATER, // King Pen
+        602 to SkylanderElement.EARTH, // Tri-Tip
+        603 to SkylanderElement.UNDEAD, // Chopscotch
+        604 to SkylanderElement.LIFE, // Boom Bloom
+        605 to SkylanderElement.OTHER, // Pit Boss: unconfirmed
+        606 to SkylanderElement.EARTH, // Barbella
+        607 to SkylanderElement.AIR, // Air Strike
+        608 to SkylanderElement.FIRE, // Ember
+        609 to SkylanderElement.LIFE, // Ambush
+        610 to SkylanderElement.TECH, // Dr. Krankcase
+        611 to SkylanderElement.UNDEAD, // Hood Sickle
+        612 to SkylanderElement.OTHER, // Tae Kwon Crow: unconfirmed
+        613 to SkylanderElement.EARTH, // Golden Queen
+        614 to SkylanderElement.UNDEAD, // Wolfgang
+        615 to SkylanderElement.MAGIC, // Pain-Yatta
+        616 to SkylanderElement.MAGIC, // Mysticat
+        617 to SkylanderElement.OTHER, // Starcast: unconfirmed
+        618 to SkylanderElement.OTHER, // Buckshot: unconfirmed
+        619 to SkylanderElement.LIGHT, // Aurora
+        620 to SkylanderElement.FIRE, // Flare Wolf
+        621 to SkylanderElement.LIFE, // Chompy Mage
+        622 to SkylanderElement.AIR, // Bad Juju
+        623 to SkylanderElement.DARK, // Grave Clobber
+        624 to SkylanderElement.LIGHT, // Blaster-Tron
+        625 to SkylanderElement.OTHER, // Ro-Bow: unconfirmed
+        626 to SkylanderElement.OTHER, // Chain Reaction: unconfirmed
+        627 to SkylanderElement.KAOS, // Kaos
+        628 to SkylanderElement.AIR, // Wild Storm
+        629 to SkylanderElement.WATER, // Tidepool
+        630 to SkylanderElement.LIFE, // Crash Bandicoot
+        631 to SkylanderElement.TECH, // Dr. Neo Cortex
+    )
+
+    /**
      * Returns what is known about a figure. Variants missing from the table fall back to the other
      * variants of the same figure; the game is only kept when all of those share it.
      */
     fun find(id: Int, variant: Int): SkylanderInfo? =
-        byIdAndVariant[key(id, variant)] ?: byId[id]
+        byIdAndVariant[key(id, variant)] ?: byId[id] ?: IMAGINATORS_ELEMENTS[id]?.let { element ->
+            SkylanderInfo(game = SkylanderGame.IMAGINATORS, element = element, type = SkylanderType.SKYLANDER)
+        }
 }
