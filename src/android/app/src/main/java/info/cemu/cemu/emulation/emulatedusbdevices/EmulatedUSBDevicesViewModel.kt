@@ -263,6 +263,25 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
         }
         setSkylanderSlotPath(slot, figure.path)
         skylanderSlots.refresh()
+        recordSkylanderUsed(figure.path)
+    }
+
+    val skylanderLastUsed = AppSettingsStore.dataStore.data
+        .map { it.skylanderLastUsed }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    private fun recordSkylanderUsed(path: String) {
+        val now = System.currentTimeMillis()
+        viewModelScope.launch {
+            AppSettingsStore.dataStore.updateData { settings ->
+                // Keep only the most recent figures so the settings file stays small.
+                val lastUsed = (settings.skylanderLastUsed + (path to now)).entries
+                    .sortedByDescending { it.value }
+                    .take(MAX_LAST_USED)
+                    .associate { it.key to it.value }
+                settings.copy(skylanderLastUsed = lastUsed)
+            }
+        }
     }
 
     fun loadDimensionsFigure(
@@ -296,5 +315,6 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
 
     companion object {
         const val SKYLANDER_SWAP_DELAY_MS = 500L
+        private const val MAX_LAST_USED = 200
     }
 }

@@ -12,6 +12,17 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import info.cemu.cemu.common.settings.SkylanderTeam
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -143,6 +154,7 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
     val slotPaths by viewModel.skylanderSlotPaths.collectAsState()
     val installedFigures by viewModel.installedSkylanderFigures.state.collectAsState()
     val isSwapping by viewModel.isSwappingSkylander.collectAsState()
+    val scope = rememberCoroutineScope()
     var selectedSlot by rememberSaveable { mutableIntStateOf(PLAYER_1_SLOT) }
     var showAllSlots by rememberSaveable { mutableStateOf(false) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
@@ -155,6 +167,11 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
     var versionFilter by rememberSaveable { mutableStateOf(VersionFilter.MAIN) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val favourites by viewModel.skylanderFavourites.collectAsState()
+    val lastUsed by viewModel.skylanderLastUsed.collectAsState()
+    var sortOrder by rememberSaveable { mutableStateOf(SortOrder.NAME) }
+    // The figure whose details and versions are shown, by file path. Opened with a long press.
+    var detailsPath by rememberSaveable { mutableStateOf<String?>(null) }
+    val gridState = rememberLazyGridState()
 
     // Only figures that work in the running game are shown. The game is detected from the running
     // title, and can be changed in the filters.
@@ -175,6 +192,7 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
     val figuresByPath = remember(figures) { figures.associateBy { it.installed.path } }
     val filteredFigures = remember(
         figures, typeFilter, elementFilter, gameFilter, versionFilter, favourites, playingGame,
+        sortOrder, lastUsed,
     ) {
         val matching = figures.filter { figure ->
             (playingGame == null || figure.isAvailableIn(playingGame)) &&
@@ -188,14 +206,14 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
                     VersionFilter.ALL -> true
                 }
         }
-        if (versionFilter == VersionFilter.FAVOURITES) {
+        val shown = if (versionFilter == VersionFilter.FAVOURITES) {
             // One card per favourite character: its main version if installed, else another one.
             matching.groupBy { it.favouriteKey }
                 .map { (_, versions) -> versions.firstOrNull { it.isMainVersion } ?: versions.first() }
-                .sortedWith(compareBy({ it.name.lowercase() }, { it.installed.name.lowercase() }))
         } else {
             matching
         }
+        sortFigures(shown, sortOrder, lastUsed)
     }
     val isFiltered = typeFilter != null || elementFilter != null || gameFilter != null || !isGameAuto
 
@@ -221,6 +239,7 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -333,6 +352,7 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
                 onElementFilterChange = { elementFilter = it },
                 onGameFilterChange = { gameFilter = it },
             )
+            SortChips(selected = sortOrder, onSelectedChange = { sortOrder = it })
         }
 
         val error = errorMessage
@@ -385,33 +405,481 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
             return@Column
         }
 
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 104.dp),
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(filteredFigures, key = { it.installed.path }) { figure ->
-                val loadedSlot = slotPaths.indexOf(figure.installed.path).takeIf { it >= 0 }
-                FigureCard(
-                    figure = figure,
-                    artFile = artIndex.findArt(figure),
-                    loadedSlot = loadedSlot,
-                    isFavourite = figure.favouriteKey in favourites,
-                    onToggleFavourite = { viewModel.toggleSkylanderFavourite(figure.favouriteKey) },
-                    enabled = !isSwapping,
-                    onClick = {
-                        if (loadedSlot != null) {
-                            viewModel.clearSkylandersFigure(loadedSlot)
-                        } else {
-                            viewModel.placeSkylanderFigure(
-                                figure.installed,
-                                targetSlot(figure, selectedSlot, slots),
-                            )
-                        }
+        // Where each letter's first figure is in the grid, for the A-Z jump bar.
+        val letterIndex = remember(filteredFigures) {
+            buildMap {
+                filteredFigures.forEachIndexed { index, figure -> putIfAbsent(jumpLetter(figure.name), index) }
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 104.dp),
+                state = gridState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(filteredFigures, key = { it.installed.path }) { figure ->
+                    val loadedSlot = slotPaths.indexOf(figure.installed.path).takeIf { it >= 0 }
+                    FigureCard(
+                        figure = figure,
+                        artFile = artIndex.findArt(figure),
+                        loadedSlot = loadedSlot,
+                        isFavourite = figure.favouriteKey in favourites,
+                        onToggleFavourite = { viewModel.toggleSkylanderFavourite(figure.favouriteKey) },
+                        enabled = !isSwapping,
+                        onClick = {
+                            if (loadedSlot != null) {
+                                viewModel.clearSkylandersFigure(loadedSlot)
+                            } else {
+                                viewModel.placeSkylanderFigure(
+                                    figure.installed,
+                                    targetSlot(figure, selectedSlot, slots),
+                                )
+                            }
+                        },
+                        onLongClick = { detailsPath = figure.installed.path },
+                    )
+                }
+            }
+            // The jump bar only makes sense when the grid is in alphabetical order.
+            if (sortOrder == SortOrder.NAME && filteredFigures.size > 12) {
+                AlphabetJumpBar(
+                    availableLetters = letterIndex.keys,
+                    onJump = { letter ->
+                        letterIndex[letter]?.let { index -> scope.launch { gridState.scrollToItem(index) } }
                     },
                 )
             }
+        }
+    }
+
+    val detailsFigure = detailsPath?.let(figuresByPath::get)
+    if (detailsFigure != null) {
+        FigureDetailsPanel(
+            figure = detailsFigure,
+            allFigures = figures,
+            names = names,
+            artIndex = artIndex,
+            slotPaths = slotPaths,
+            enabled = !isSwapping,
+            onPlace = { version ->
+                viewModel.placeSkylanderFigure(version.installed, targetSlot(version, selectedSlot, slots))
+                detailsPath = null
+            },
+            onRemove = { slot -> viewModel.clearSkylandersFigure(slot) },
+            onCreate = { id, variant -> viewModel.createSkylanderFigure(id, variant) },
+            onShowVersion = { version -> detailsPath = version.installed.path },
+            onDismiss = { detailsPath = null },
+        )
+    }
+    }
+}
+
+private fun formatPlayTime(seconds: Long): String {
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    return if (hours > 0) tr("{0} h {1} min", hours, minutes) else tr("{0} min", minutes)
+}
+
+/**
+ * A panel over the grid with a figure's details, its saved stats and all versions of the
+ * character, where any installed version can be placed and missing ones created. Drawn inside the
+ * portal window rather than as a dialog, which would need input focus.
+ */
+@Composable
+private fun FigureDetailsPanel(
+    figure: PortalFigure,
+    allFigures: List<PortalFigure>,
+    names: Map<Pair<Int, Int>, String>,
+    artIndex: Map<String, File>,
+    slotPaths: List<String?>,
+    enabled: Boolean,
+    onPlace: (PortalFigure) -> Unit,
+    onRemove: (Int) -> Unit,
+    onCreate: (Int, Int) -> Unit,
+    onShowVersion: (PortalFigure) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val isCharacter = SkylanderVersions.isCharacter(figure.info)
+    val stats by produceState<SkylanderFigureStats?>(null, figure.installed.path) {
+        value = if (isCharacter) {
+            withContext(Dispatchers.IO) { SkylanderFigureStatsReader.read(figure.installed.path) }
+        } else {
+            null
+        }
+    }
+    val seriesNumbers = remember(names) { SkylanderVersions.seriesNumbers(names) }
+    val figureId = figure.idAndVariant?.first
+
+    // Every version of this figure id: installed ones first, then the rest of Cemu's list.
+    val installedVersions = remember(allFigures, figureId) {
+        if (figureId == null) {
+            listOf(figure)
+        } else {
+            allFigures.filter { it.idAndVariant?.first == figureId }
+                .sortedBy { SkylanderVersions.seriesRank(it.idAndVariant!!.second) }
+        }
+    }
+    val missingVersions = remember(names, installedVersions, figureId) {
+        if (figureId == null || !isCharacter) {
+            emptyList()
+        } else {
+            val installedKeys = installedVersions.mapNotNull { it.idAndVariant }.toSet()
+            names.filterKeys { it.first == figureId && it !in installedKeys }
+                .entries
+                .sortedBy { SkylanderVersions.seriesRank(it.key.second) }
+                .map { (key, name) ->
+                    PortalFigure(
+                        installed = NativeEmulatedUSBDevices.InstalledFigure(name, ""),
+                        name = name,
+                        baseName = null,
+                        info = SkylanderCatalog.find(key.first, key.second),
+                        idAndVariant = key,
+                    )
+                }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f)
+                // Swallow taps so they don't reach the scrim and close the panel.
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            border = BorderStroke(1.dp, figure.element.color.copy(alpha = 0.6f)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(verticalAlignment = Alignment.Top) {
+                    FigureArt(
+                        figure = figure,
+                        artFile = artIndex.findArt(figure),
+                        modifier = Modifier
+                            .size(104.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text = figure.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
+                        Text(
+                            text = listOfNotNull(
+                                figureSubtitle(figure).ifEmpty { null },
+                                figure.info?.game?.let { tr(it.label) },
+                            ).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (figure.showsFileName) {
+                            Text(
+                                text = figure.installed.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        val loadedSlot = slotPaths.indexOf(figure.installed.path).takeIf { it >= 0 }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        if (loadedSlot != null) {
+                            TextButton(enabled = enabled, onClick = { onRemove(loadedSlot) }) {
+                                Text(tr("Remove from {0}", slotLabel(loadedSlot)))
+                            }
+                        } else {
+                            Button(enabled = enabled, onClick = { onPlace(figure) }) {
+                                Text(tr("Place on portal"))
+                            }
+                        }
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_close),
+                            contentDescription = tr("Close"),
+                        )
+                    }
+                }
+
+                if (isCharacter) {
+                    StatsSection(stats)
+                }
+
+                if (installedVersions.size + missingVersions.size > 1) {
+                    Text(
+                        text = tr("Versions"),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    installedVersions.forEach { version ->
+                        VersionRow(
+                            version = version,
+                            label = versionLabel(version, seriesNumbers),
+                            artFile = artIndex.findArt(version),
+                            isCurrent = version.installed.path == figure.installed.path,
+                            status = slotPaths.indexOf(version.installed.path).takeIf { it >= 0 }
+                                ?.let { tr("On {0}", slotLabel(it)) },
+                            actionLabel = tr("Place"),
+                            enabled = enabled,
+                            onClick = { onShowVersion(version) },
+                            onAction = { onPlace(version) },
+                        )
+                    }
+                    missingVersions.forEach { version ->
+                        VersionRow(
+                            version = version,
+                            label = versionLabel(version, seriesNumbers),
+                            artFile = null,
+                            isCurrent = false,
+                            status = tr("Not created yet"),
+                            actionLabel = tr("Create"),
+                            enabled = enabled,
+                            onClick = null,
+                            onAction = {
+                                val (id, variant) = version.idAndVariant ?: return@VersionRow
+                                onCreate(id, variant)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun versionLabel(version: PortalFigure, seriesNumbers: Map<Pair<Int, Int>, Int>): String {
+    val key = version.idAndVariant ?: return ""
+    return seriesNumbers[key]?.let { tr("Series {0}", it) } ?: tr("Variant")
+}
+
+@Composable
+private fun StatsSection(stats: SkylanderFigureStats?) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = tr("Saved progress"),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        if (stats == null) {
+            Text(
+                text = tr("No saved progress could be read from this figure."),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@Column
+        }
+        StatRow(tr("Nickname"), stats.nickname ?: tr("None"))
+        StatRow(tr("Gold"), stats.gold.toString())
+        StatRow(tr("Play time"), formatPlayTime(stats.playTimeSeconds))
+        StatRow(tr("Hero level"), stats.heroLevel.toString())
+        StatRow(tr("Last placed"), stats.lastPlaced ?: tr("Never"))
+    }
+}
+
+@Composable
+private fun StatRow(label: String, value: String) {
+    Row {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(text = value, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+    }
+}
+
+@Composable
+private fun VersionRow(
+    version: PortalFigure,
+    label: String,
+    artFile: File?,
+    isCurrent: Boolean,
+    status: String?,
+    actionLabel: String,
+    enabled: Boolean,
+    onClick: (() -> Unit)?,
+    onAction: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                RoundedCornerShape(10.dp),
+            )
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FigureArt(
+            figure = version,
+            artFile = artFile,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(8.dp)),
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 10.dp),
+        ) {
+            Text(
+                text = version.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = listOfNotNull(label.ifEmpty { null }, status).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(enabled = enabled, onClick = onAction) {
+            Text(actionLabel)
+        }
+    }
+}
+
+/** The letter a figure is filed under in the A-Z jump bar; '#' for names not starting with A-Z. */
+private fun jumpLetter(name: String): Char {
+    val first = name.firstOrNull()?.uppercaseChar() ?: '#'
+    return if (first in 'A'..'Z') first else '#'
+}
+
+private val JUMP_LETTERS = listOf('#') + ('A'..'Z').toList()
+
+/**
+ * A strip of letters down the side of the grid. Tapping or dragging over it scrolls to the first
+ * figure starting with that letter, since the portal screen can't show a keyboard for searching.
+ */
+@Composable
+private fun AlphabetJumpBar(availableLetters: Set<Char>, onJump: (Char) -> Unit) {
+    var height by remember { mutableIntStateOf(1) }
+    var activeLetter by remember { mutableStateOf<Char?>(null) }
+
+    fun letterAt(y: Float): Char {
+        val index = (y / height * JUMP_LETTERS.size).toInt().coerceIn(0, JUMP_LETTERS.lastIndex)
+        return JUMP_LETTERS[index]
+    }
+
+    fun jumpTo(y: Float) {
+        val letter = letterAt(y)
+        if (letter != activeLetter) {
+            activeLetter = letter
+            if (letter in availableLetters) onJump(letter)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(22.dp)
+            .padding(start = 4.dp)
+            .onSizeChanged { height = it.height.coerceAtLeast(1) }
+            .pointerInput(Unit) {
+                detectTapGestures(onPress = { offset ->
+                    jumpTo(offset.y)
+                    tryAwaitRelease()
+                    activeLetter = null
+                })
+            }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragStart = { offset -> jumpTo(offset.y) },
+                    onDragEnd = { activeLetter = null },
+                    onDragCancel = { activeLetter = null },
+                    onVerticalDrag = { change, _ -> jumpTo(change.position.y) },
+                )
+            },
+        verticalArrangement = Arrangement.SpaceEvenly,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        JUMP_LETTERS.forEach { letter ->
+            val isAvailable = letter in availableLetters
+            Text(
+                text = letter.toString(),
+                fontSize = 10.sp,
+                fontWeight = if (letter == activeLetter) FontWeight.Black else FontWeight.Bold,
+                color = when {
+                    letter == activeLetter -> MaterialTheme.colorScheme.primary
+                    isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                },
+            )
+        }
+    }
+}
+
+/** How the grid is ordered. */
+private enum class SortOrder(val label: String) {
+    NAME("A-Z"),
+    ELEMENT("Element"),
+    GAME("Game"),
+    RECENT("Recently used"),
+}
+
+private fun sortFigures(
+    figures: List<PortalFigure>,
+    order: SortOrder,
+    lastUsed: Map<String, Long>,
+): List<PortalFigure> {
+    val byName = compareBy<PortalFigure>({ it.name.lowercase() }, { it.installed.name.lowercase() })
+    return when (order) {
+        SortOrder.NAME -> figures.sortedWith(byName)
+        SortOrder.ELEMENT -> figures.sortedWith(compareBy<PortalFigure> { it.element.ordinal }.then(byName))
+        SortOrder.GAME -> figures.sortedWith(
+            compareBy<PortalFigure> { it.availableFrom?.ordinal ?: Int.MAX_VALUE }.then(byName)
+        )
+        // Figures never used go last, in name order.
+        SortOrder.RECENT -> figures.sortedWith(
+            compareByDescending<PortalFigure> { lastUsed[it.installed.path] ?: 0L }.then(byName)
+        )
+    }
+}
+
+@Composable
+private fun SortChips(selected: SortOrder, onSelectedChange: (SortOrder) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(SortOrder.entries) { option ->
+            FilterChip(
+                selected = option == selected,
+                onClick = { onSelectedChange(option) },
+                label = { Text(tr("Sort: {0}", tr(option.label))) },
+                colors = portalChipColors(),
+            )
         }
     }
 }
@@ -642,6 +1110,7 @@ private fun portalChipColors() = FilterChipDefaults.filterChipColors(
     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FigureCard(
     figure: PortalFigure,
@@ -651,13 +1120,15 @@ private fun FigureCard(
     onToggleFavourite: () -> Unit,
     enabled: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val isLoaded = loadedSlot != null
     val elementColor = figure.element.color
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick),
+            // Long-pressing is always allowed: it only opens the details panel.
+            .combinedClickable(onClick = { if (enabled) onClick() }, onLongClick = onLongClick),
         border = if (isLoaded) {
             BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
         } else {

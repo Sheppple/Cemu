@@ -80,6 +80,8 @@ data class AppSettings(
     val skylanderTeams: List<SkylanderTeam> = emptyList(),
     /** Favourite Skylanders, by [info.cemu.cemu.emulation.emulatedusbdevices.PortalFigure.favouriteKey]. */
     val skylanderFavourites: Set<String> = emptySet(),
+    /** When each figure file was last placed on the portal, in milliseconds since the epoch. */
+    val skylanderLastUsed: Map<String, Long> = emptyMap(),
 )
 
 object AppSettingsSerializer : Serializer<AppSettings> {

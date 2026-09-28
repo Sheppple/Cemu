@@ -50,6 +50,14 @@ It installs as a separate app: `applicationId` is `info.cemu.cemu.portal` and th
 - **Favourites:** tap the star on a card to make it a favourite, and tap **★ Favourites** above the
   grid to see only your favourites. Favourites are per character, so they carry over between a
   character's Series and variants.
+- **Details and versions:** long-press a card for its details panel. It shows the figure's art,
+  element, game and Series, and the progress saved on it: nickname, gold, play time, hero level
+  and when it was last placed. The character level isn't shown yet. The panel also lists every
+  version of the character, with **Place** for installed versions and **Create** for the rest.
+  Tap a version to see its details.
+- **Sorting and the A-Z bar:** the filters include **Sort: A-Z / Element / Game / Recently used**.
+  With A-Z, a letter bar down the right of the grid jumps to the first figure starting with a
+  letter. You can tap it or drag along it.
 - **Filters:** the filter button shows rows of chips for type (Traps, Vehicles, Giants, Swappers…),
   element and game. Only filters that match at least one of your figures are shown.
 - **Theme:** black background with gold highlights, to suit the AMOLED bottom screen.
