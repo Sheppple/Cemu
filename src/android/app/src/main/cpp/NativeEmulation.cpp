@@ -422,3 +422,24 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_getForegroundTitleName(JNIEn
 {
 	return env->NewStringUTF(CafeSystem::GetForegroundTitleName().c_str());
 }
+
+extern "C" [[maybe_unused]] JNIEXPORT jobjectArray JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_getForegroundTitleNames(JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	std::vector<std::string> names = CafeSystem::GetForegroundTitleNames();
+	jclass stringClass = env->FindClass("java/lang/String");
+	jobjectArray result = env->NewObjectArray(static_cast<jsize>(names.size()), stringClass, nullptr);
+	for (size_t i = 0; i < names.size(); i++)
+	{
+		jstring name = env->NewStringUTF(names[i].c_str());
+		env->SetObjectArrayElement(result, static_cast<jsize>(i), name);
+		env->DeleteLocalRef(name);
+	}
+	return result;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jlong JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_getForegroundTitleId([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return static_cast<jlong>(CafeSystem::GetForegroundTitleId());
+}

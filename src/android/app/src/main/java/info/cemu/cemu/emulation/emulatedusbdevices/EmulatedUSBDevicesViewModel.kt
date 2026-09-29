@@ -10,12 +10,14 @@ import info.cemu.cemu.nativeinterface.NativeEmulation
 import info.cemu.cemu.common.settings.SkylanderTeam
 import info.cemu.cemu.common.settings.SkylanderTeamFigure
 import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -28,6 +30,14 @@ sealed class UsbDeviceEvent {
 }
 
 class EmulatedUSBDevicesViewModel : ViewModel() {
+    init {
+        // Back up the figure files when the portal opens in a game, before any figure is
+        // placed. Skipped if they're unchanged since the last backup.
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { SkylanderBackups.backUpIfChanged() }
+        }
+    }
+
     val skylanderFigures = NativeEmulatedUSBDevices.getSkylanderFigures()
     val dimensionsMiniFigures = NativeEmulatedUSBDevices.getDimensionsMiniFigures()
     val infinityFigures = NativeEmulatedUSBDevices.getInfinityFigures()
@@ -89,6 +99,18 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
         NativeEmulatedUSBDevices.clearSkylandersFigure(slot)
         setSkylanderSlotPath(slot, null)
         skylanderSlots.refresh()
+    }
+
+    /**
+     * Puts figures back on the slots they were removed from, e.g. to undo a removal. Loads them
+     * straight away, without the swap delay, since their slots are empty.
+     */
+    fun restoreSkylanderFigures(figures: List<Pair<NativeEmulatedUSBDevices.InstalledFigure, Int>>) {
+        for ((figure, slot) in figures) {
+            if (skylanderSlots.state.value[slot] == null && File(figure.path).isFile) {
+                loadSkylanderFigure(figure, slot)
+            }
+        }
     }
 
     fun clearAllSkylanderFigures() {
@@ -272,15 +294,65 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
      * The Skylanders game that is running, detected from the title name once a game is running.
      * Recently used figures are kept per game.
      */
-    val runningSkylanderGame: SkylanderGame? by lazy {
-        runCatching { SkylanderVersions.gameForTitle(NativeEmulation.getForegroundTitleName()) }.getOrNull()
+    /** The running title's id in hex, used to remember a game chosen by hand for it. */
+    val runningTitleId: String? by lazy {
+        runCatching { "%016X".format(NativeEmulation.getForegroundTitleId()) }.getOrNull()
     }
 
-    private val lastUsedGameKey: String get() = runningSkylanderGame?.name ?: "ANY"
+    /**
+     * The Skylanders game detected from the running title's names. All of its names in every
+     * language are checked, English first, so a console set to another language still matches.
+     */
+    val detectedSkylanderGame: SkylanderGame? by lazy {
+        runCatching {
+            NativeEmulation.getForegroundTitleNames().firstNotNullOfOrNull(SkylanderVersions::gameForTitle)
+        }.getOrNull() ?: runCatching {
+            SkylanderVersions.gameForTitle(NativeEmulation.getForegroundTitleName())
+        }.getOrNull()
+    }
+
+    /** The game chosen by hand for this title, if any: a SkylanderGame name or "ANY". */
+    val skylanderGameOverride = AppSettingsStore.dataStore.data
+        .map { settings -> runningTitleId?.let { settings.skylanderGameOverrides[it] } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private fun gameFor(override: String?): SkylanderGame? = when (override) {
+        null -> detectedSkylanderGame
+        GAME_OVERRIDE_ANY -> null
+        else -> SkylanderGame.entries.firstOrNull { it.name == override } ?: detectedSkylanderGame
+    }
+
+    /**
+     * The Skylanders game being played, which decides which figures are shown: the game chosen
+     * by hand for this title, or else the detected one. Null means all figures are shown.
+     */
+    val runningSkylanderGame = skylanderGameOverride
+        .map(::gameFor)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, detectedSkylanderGame)
+
+    /** Chooses the game for the running title by hand: a SkylanderGame name, "ANY", or null for automatic. */
+    fun setSkylanderGameOverride(override: String?) {
+        val titleId = runningTitleId ?: return
+        viewModelScope.launch {
+            AppSettingsStore.dataStore.updateData { settings ->
+                val overrides = if (override == null) {
+                    settings.skylanderGameOverrides - titleId
+                } else {
+                    settings.skylanderGameOverrides + (titleId to override)
+                }
+                settings.copy(skylanderGameOverrides = overrides)
+            }
+        }
+    }
+
+    private val lastUsedGameKey: String get() = runningSkylanderGame.value?.name ?: "ANY"
 
     /** When each figure file was last placed while playing the running game. */
     val skylanderLastUsed = AppSettingsStore.dataStore.data
-        .map { it.skylanderLastUsedByGame[lastUsedGameKey].orEmpty() }
+        .map { settings ->
+            val game = gameFor(runningTitleId?.let { settings.skylanderGameOverrides[it] })
+            settings.skylanderLastUsedByGame[game?.name ?: "ANY"].orEmpty()
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     /**
@@ -304,6 +376,10 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
     val skylanderPortalSettings = AppSettingsStore.dataStore.data
         .map { it.skylanderPortalSettings }
         .stateIn(viewModelScope, SharingStarted.Eagerly, SkylanderPortalSettings())
+
+    /** Reads the saved portal settings, waiting for them to load. */
+    suspend fun loadSkylanderPortalSettings(): SkylanderPortalSettings =
+        AppSettingsStore.dataStore.data.first().skylanderPortalSettings
 
     fun updateSkylanderPortalSettings(update: (SkylanderPortalSettings) -> SkylanderPortalSettings) {
         viewModelScope.launch {
@@ -345,5 +421,6 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
     companion object {
         const val SKYLANDER_SWAP_DELAY_MS = 500L
         private const val MAX_LAST_USED_PER_GAME = 30
+        const val GAME_OVERRIDE_ANY = "ANY"
     }
 }

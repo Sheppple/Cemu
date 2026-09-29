@@ -54,6 +54,8 @@ namespace CafeSystem
 	CafeConsoleRegion GetForegroundTitleRegion();
 	CafeConsoleRegion GetPlatformRegion();
 	std::string GetForegroundTitleName();
+	// Every short and long name of the running title in its meta.xml, in all languages.
+	std::vector<std::string> GetForegroundTitleNames();
 	std::string GetForegroundTitleArgStr();
 	uint32 GetForegroundTitleOlvAccesskey();
 	CosCapabilityBits GetForegroundTitleCosCapabilities(CosCapabilityGroup group);

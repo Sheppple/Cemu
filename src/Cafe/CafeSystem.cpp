@@ -976,6 +976,27 @@ namespace CafeSystem
 		return applicationName;
 	}
 
+	std::vector<std::string> GetForegroundTitleNames()
+	{
+		std::vector<std::string> names;
+		if (sLaunchModeIsStandalone)
+			return names;
+		auto* metaInfo = sGameInfo_ForegroundTitle.GetBase().GetMetaInfo();
+		if (!metaInfo)
+			return names;
+		// English first, since callers match names against English titles.
+		for (int i = -1; i < 12; i++)
+		{
+			CafeConsoleLanguage language = i < 0 ? CafeConsoleLanguage::EN : (CafeConsoleLanguage)i;
+			for (const std::string& name : {metaInfo->GetShortName(language), metaInfo->GetLongName(language)})
+			{
+				if (!name.empty() && std::find(names.begin(), names.end(), name) == names.end())
+					names.push_back(name);
+			}
+		}
+		return names;
+	}
+
 	uint32 GetForegroundTitleOlvAccesskey()
 	{
 		if (sLaunchModeIsStandalone)

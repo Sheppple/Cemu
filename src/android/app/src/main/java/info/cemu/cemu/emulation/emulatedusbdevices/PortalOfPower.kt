@@ -2,14 +2,10 @@ package info.cemu.cemu.emulation.emulatedusbdevices
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -23,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -74,21 +71,26 @@ private fun rememberPortalLedColors(): State<IntArray> = produceState(IntArray(3
  */
 @Composable
 fun PortalOfPower(
-    figuresOnPortal: List<PortalFigure>,
+    /** The figures on the portal with the slots they're on. */
+    figuresOnPortal: List<Pair<Int, PortalFigure>>,
     artIndex: Map<String, File>,
     isGlowEnabled: Boolean,
+    /** Whether the glow may animate; false while it's hidden or covered, to save work. */
+    isAnimating: Boolean,
+    /** Called with a figure's slot when it's tapped on the portal. */
+    onFigureClick: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ledColors by rememberPortalLedColors()
     val targetGlow = ledColor(ledColors[1]) ?: ledColor(ledColors[0])
-        ?: figuresOnPortal.firstOrNull()?.element?.color ?: DEFAULT_GLOW
+        ?: figuresOnPortal.firstOrNull()?.second?.element?.color ?: DEFAULT_GLOW
     val glowColor by animateColorAsState(targetGlow, tween(800), label = "portalGlow")
     val trapTarget = ledColor(ledColors[2]) ?: Color.Transparent
     val trapColor by animateColorAsState(trapTarget, tween(800), label = "portalTrap")
 
     // A bright flash when figures go on or come off.
     val flash = remember { Animatable(0f) }
-    val occupancy = figuresOnPortal.map { it.installed.path }
+    val occupancy = figuresOnPortal.map { (slot, figure) -> slot to figure.installed.path }
     LaunchedEffect(occupancy) {
         flash.snapTo(1f)
         flash.animateTo(0f, tween(900))
@@ -96,7 +98,7 @@ fun PortalOfPower(
 
     // Slow "breathing" and swirl for an ethereal look. Only runs while the glow is on. The values
     // are read while drawing, so the animation redraws the portal without recomposing it.
-    val animation = if (isGlowEnabled) rememberGlowAnimation() else null
+    val animation = rememberGlowAnimation(isRunning = isGlowEnabled && isAnimating)
 
     BoxWithConstraints(
         modifier = modifier
@@ -109,8 +111,8 @@ fun PortalOfPower(
                 glowColor = glowColor,
                 trapColor = trapColor,
                 isGlowEnabled = isGlowEnabled,
-                breathe = animation?.first?.value ?: 0.5f,
-                swirlDegrees = animation?.second?.value ?: 0f,
+                breathe = animation.first.value,
+                swirlDegrees = animation.second.value,
                 flash = flash.value,
             )
         }
@@ -121,8 +123,13 @@ fun PortalOfPower(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.offset(y = -(maxHeight * 0.1f)),
         ) {
-            figuresOnPortal.take(MAX_PORTRAITS).forEach { figure ->
-                FigurePortrait(figure = figure, artFile = artIndex.findArt(figure), size = portraitSize)
+            figuresOnPortal.take(MAX_PORTRAITS).forEach { (slot, figure) ->
+                FigurePortrait(
+                    figure = figure,
+                    artFile = artIndex.findArt(figure),
+                    size = portraitSize,
+                    onClick = { onFigureClick(slot) },
+                )
             }
         }
     }
@@ -130,32 +137,40 @@ fun PortalOfPower(
 
 private const val MAX_PORTRAITS = 4
 
-/** The breathing (0..1) and swirl (degrees) values of the portal's glow animation. */
+private const val BREATHE_PERIOD_MS = 5200.0
+private const val SWIRL_PERIOD_MS = 14000.0
+private const val GLOW_FRAME_MS = 33L
+
+/**
+ * The breathing (0..1) and swirl (degrees) values of the portal's glow. Updated about 30 times a
+ * second rather than every frame, since a slow glow doesn't need more, and only while [isRunning].
+ */
 @Composable
-private fun rememberGlowAnimation(): Pair<State<Float>, State<Float>> {
-    val transition = rememberInfiniteTransition(label = "portal")
-    val breathe = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Reverse),
-        label = "breathe",
-    )
-    val swirl = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(14000, easing = LinearEasing)),
-        label = "swirl",
-    )
+private fun rememberGlowAnimation(isRunning: Boolean): Pair<State<Float>, State<Float>> {
+    val breathe = remember { mutableFloatStateOf(0.5f) }
+    val swirl = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(isRunning) {
+        if (!isRunning) return@LaunchedEffect
+        // Carry on from where the swirl stopped, so pausing doesn't make it jump.
+        val start = System.nanoTime() - (swirl.floatValue / 360.0 * SWIRL_PERIOD_MS * 1e6).toLong()
+        while (true) {
+            val elapsedMs = (System.nanoTime() - start) / 1e6
+            breathe.floatValue = (sin(elapsedMs / BREATHE_PERIOD_MS * 2 * PI) * 0.5 + 0.5).toFloat()
+            swirl.floatValue = ((elapsedMs / SWIRL_PERIOD_MS * 360.0) % 360.0).toFloat()
+            delay(GLOW_FRAME_MS)
+        }
+    }
     return breathe to swirl
 }
 
 @Composable
-private fun FigurePortrait(figure: PortalFigure, artFile: File?, size: Dp) {
+private fun FigurePortrait(figure: PortalFigure, artFile: File?, size: Dp, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(size)
             .clip(CircleShape)
-            .border(2.dp, figure.element.color, CircleShape),
+            .border(2.dp, figure.element.color, CircleShape)
+            .clickable(onClick = onClick),
     ) {
         FigureArt(figure = figure, artFile = artFile, modifier = Modifier.size(size))
     }

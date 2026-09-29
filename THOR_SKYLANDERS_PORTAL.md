@@ -25,7 +25,7 @@ then install this build.
 
 ### Portal screen
 
-The portal screen has three pages. Swipe left and right, or tap the page names at the top:
+The portal screen has three pages. Change page with the arrows or dots at the top, or by swiping (which can be turned off):
 
 - **Portal:** a drawn Portal of Power, with a ring of stone bricks and rune marks around a glowing
   centre, and the figures on the portal standing in it. The glow takes the colour the game sets on
@@ -39,12 +39,18 @@ The portal screen has three pages. Swipe left and right, or tap the page names a
   are saved per game straight away, so they're still there next time you play. Only the last 30 per
   game are kept.
 
-A short tip appears when the portal opens, then fades out. The arrow at the top right shows which
+A short tip appears when the portal opens for the first few times, then fades out. The glow
+animates at about 30 frames a second, and pauses while a panel is open or another page is shown. The arrow at the top right shows which
 slot tapped figures go to; tap it to go back to the portal page. The gear button opens **Portal
 settings**:
 
 - **Portal glow:** turn the glowing, animated centre off for an unlit portal with no animation.
 - **Show portal:** hide the drawn portal to leave more room for the slots and teams.
+- **Game:** which game's figures are shown. **Automatic** uses the game detected from the title's
+  names (every language is checked, English first). Choosing a game by hand is remembered for that
+  title, for dumps whose names aren't recognised.
+- **Swipe between pages:** turn off to change pages only with the arrows and dots.
+- **Card size** and **Text size:** small, medium or large.
 - **Page order:** move pages up or down. The first page is the one the portal opens on.
 - **Reload figures and card art.**
 
@@ -58,10 +64,14 @@ Other details:
   Eon's Elite never counts as the main version, because its stats are much stronger than the
   normal releases. Earlier Series and special editions are variants, and appear under the
   **Variants** or **All versions** filter.
-- **Favourites:** tap the star on a card. Favourites are per character.
-- **Details and versions:** long-press a card for its details, saved progress (nickname, gold,
-  play time, hero level, last placed) and every version of the character, with **Place** or
+- **Removing figures:** tap a figure on the portal (on its card, on the drawn portal, or the ✕ on
+  its slot) to take it off. An **Undo** message puts it back for 5 seconds after.
+- **Favourites:** favourites show a gold star on their card. Add or remove them from the
+  long-press panel, so a tap meant for the card can't change them.
+- **Details and versions:** long-press a card for its details, its base stats (characters) or the
+  villain captured in it (Trap Team traps), and every version of the character, with **Place** or
   **Create**.
+- **No figures yet:** the Portal and Collection pages offer **Create all figures**.
 - **Slots:** Player 1, Player 2, Trap and Magic Item; **More** shows the other twelve. Traps and
   magic items go to their own slots, and Swap Force halves go to the next free slot.
 
@@ -96,6 +106,34 @@ not case-sensitive.
 
 The element, game and type of each figure come from the Skylanders figure list in Dolphin
 (GPL-2.0-or-later). See `SkylanderCatalog.kt`.
+
+### Base stats
+
+Base stats are read from `app/src/main/assets/skylanders_stats.json`, which maps a figure id in
+4-digit hex (as in the card art names) to its stats, optionally per variant. The numbers below only
+show the format; they are not real stats:
+
+```
+{
+  "000E": { "health": 270, "speed": 43, "armor": 18, "critical": 30, "elemental": 25 },
+  "000E_3810": { "health": 400, "speed": 50, "armor": 30, "critical": 40, "elemental": 40 }
+}
+```
+
+The file ships empty, so figures show "not in the stats table yet" until it's filled in.
+
+### Trap Team villains
+
+Long-pressing a trap shows the villain captured in it, whether it's evolved, and its nickname,
+read from the trap's figure data. The layout and villain ids follow the figure format documented by
+the Runes figure editor (github.com/NefariousTechSupport/Runes).
+
+### Figure backups
+
+The figure files are backed up each time the portal opens in a game, before any figure is placed,
+if they've changed since the last backup. The last 5 backups are kept in
+`<Cemu data>/emulatedUSBDevices/skylanders_backups/`. **Settings → Emulated USB Devices** lists them,
+can back up now, and can restore one; restoring backs up the current figures first.
 
 ## How it works
 

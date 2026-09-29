@@ -63,4 +63,12 @@ object NativeEmulation {
     /** The name of the running title, e.g. "Skylanders SWAP FORCE", or empty if none is running. */
     @JvmStatic
     external fun getForegroundTitleName(): String
+
+    /** Every short and long name of the running title, in all languages, English first. */
+    @JvmStatic
+    external fun getForegroundTitleNames(): Array<String>
+
+    /** The running title's 64-bit title id. */
+    @JvmStatic
+    external fun getForegroundTitleId(): Long
 }

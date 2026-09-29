@@ -28,6 +28,8 @@ import info.cemu.cemu.common.ui.components.Header
 import info.cemu.cemu.common.ui.components.ScreenContent
 import info.cemu.cemu.common.ui.components.Toggle
 import info.cemu.cemu.common.ui.localization.tr
+import info.cemu.cemu.emulation.emulatedusbdevices.SkylanderBackup
+import info.cemu.cemu.emulation.emulatedusbdevices.SkylanderBackups
 import info.cemu.cemu.emulation.emulatedusbdevices.createMissingSkylanderFigures
 import info.cemu.cemu.emulation.emulatedusbdevices.findArt
 import info.cemu.cemu.emulation.emulatedusbdevices.importSkylanderArt
@@ -106,6 +108,12 @@ private fun SkylanderFiguresSection() {
     var statusVersion by remember { mutableIntStateOf(0) }
     var artStatus by remember { mutableStateOf<ArtStatus?>(null) }
     var showMissing by remember { mutableStateOf(false) }
+    var backups by remember { mutableStateOf<List<SkylanderBackup>>(emptyList()) }
+    var pendingRestore by remember { mutableStateOf<SkylanderBackup?>(null) }
+
+    LaunchedEffect(statusVersion) {
+        backups = withContext(Dispatchers.IO) { runCatching { SkylanderBackups.list() }.getOrDefault(emptyList()) }
+    }
 
     LaunchedEffect(statusVersion) {
         artStatus = withContext(Dispatchers.IO) { runCatching { loadArtStatus(context.assets) }.getOrNull() }
@@ -187,6 +195,57 @@ private fun SkylanderFiguresSection() {
         Text(
             text = tr("{0} of {1}", done, total),
             modifier = Modifier.padding(horizontal = 16.dp),
+        )
+    }
+
+    Header(tr("Skylanders figure backups"))
+
+    Text(
+        text = tr("The figures are backed up each time the portal opens in a game, if they've changed. The last {0} backups are kept.", SkylanderBackups.MAX_BACKUPS),
+        fontSize = 14.sp,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    )
+
+    Button(
+        label = tr("Back up figures now"),
+        enabled = !isBusy,
+        onClick = {
+            runBusy {
+                val made = withContext(Dispatchers.IO) { SkylanderBackups.backUpIfChanged() }
+                if (made) tr("Figures backed up") else tr("No changes since the last backup")
+            }
+        },
+    )
+
+    if (backups.isEmpty()) {
+        Text(
+            text = tr("No backups yet."),
+            fontSize = 14.sp,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+    }
+    val dateFormat = remember { java.text.DateFormat.getDateTimeInstance() }
+    backups.forEach { backup ->
+        val isPending = backup == pendingRestore
+        Button(
+            label = dateFormat.format(java.util.Date(backup.createdAtMillis)),
+            description = if (isPending) {
+                tr("Tap again to restore these {0} figures. Your current figures are backed up first.", backup.figureCount)
+            } else {
+                tr("{0} figures · Tap to restore", backup.figureCount)
+            },
+            enabled = !isBusy,
+            onClick = {
+                if (!isPending) {
+                    pendingRestore = backup
+                } else {
+                    pendingRestore = null
+                    runBusy {
+                        val restored = withContext(Dispatchers.IO) { SkylanderBackups.restore(backup) }
+                        tr("Restored {0} figures", restored)
+                    }
+                }
+            },
         )
     }
 

@@ -93,6 +93,11 @@ data class AppSettings(
      */
     val skylanderLastUsedByGame: Map<String, Map<String, Long>> = emptyMap(),
     val skylanderPortalSettings: SkylanderPortalSettings = SkylanderPortalSettings(),
+    /**
+     * Skylanders game chosen by hand for a title, keyed by title id in hex, for titles whose game
+     * isn't detected from their name. The value is a SkylanderGame name, or "ANY" for all figures.
+     */
+    val skylanderGameOverrides: Map<String, String> = emptyMap(),
 )
 
 /** How the Skylanders portal screen looks. */
@@ -108,6 +113,14 @@ data class SkylanderPortalSettings(
      * pages are added at the end.
      */
     val pageOrder: List<String> = listOf("PORTAL", "COLLECTION", "RECENT"),
+    /** Size of the figure cards: "SMALL", "MEDIUM" or "LARGE". */
+    val cardSize: String = "MEDIUM",
+    /** Size of the text on the portal screen: "SMALL", "MEDIUM" or "LARGE". */
+    val textSize: String = "MEDIUM",
+    /** Whether pages can be changed by swiping, as well as with the arrows and page names. */
+    val isSwipeEnabled: Boolean = true,
+    /** How many times the tip has been shown; it's only shown for the first few launches. */
+    val tipShownCount: Int = 0,
 )
 
 object AppSettingsSerializer : Serializer<AppSettings> {
