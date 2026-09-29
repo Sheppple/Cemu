@@ -172,8 +172,11 @@ private fun rememberGlowAnimation(isRunning: Boolean): Pair<State<Float>, State<
 @Composable
 private fun FigurePortrait(figure: PortalFigure, artFile: File?, size: Dp, onClick: () -> Unit) {
     val assets = LocalContext.current.assets
-    val icon by produceState<ImageBitmap?>(null, figure.artKey) {
-        value = withContext(Dispatchers.IO) { runCatching { loadSkylanderIcon(assets, figure) }.getOrNull() }
+    // Start from the cache, so a figure's icon doesn't briefly show its card art first.
+    val icon by produceState(figure.artKey?.let { cachedSkylanderArt("icon:$it") }, figure.artKey) {
+        if (value == null) {
+            value = withContext(Dispatchers.IO) { runCatching { loadSkylanderIcon(assets, figure) }.getOrNull() }
+        }
     }
 
     val currentIcon = icon
