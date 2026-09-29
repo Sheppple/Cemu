@@ -102,6 +102,12 @@ data class SkylanderPortalSettings(
     val isGlowEnabled: Boolean = true,
     /** Whether the drawn portal is shown on the portal page, above the slots. */
     val isPortalVisible: Boolean = true,
+    /**
+     * The order of the portal screen's pages, by page name ("PORTAL", "COLLECTION", "RECENT"). The
+     * first page is the one shown when the portal opens. Unknown names are ignored and missing
+     * pages are added at the end.
+     */
+    val pageOrder: List<String> = listOf("PORTAL", "COLLECTION", "RECENT"),
 )
 
 object AppSettingsSerializer : Serializer<AppSettings> {

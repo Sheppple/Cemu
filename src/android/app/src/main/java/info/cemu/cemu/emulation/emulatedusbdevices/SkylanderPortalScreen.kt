@@ -32,7 +32,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -158,6 +157,12 @@ private enum class PortalPage(val label: String) {
     RECENT("Recent"),
 }
 
+/** The pages in the order chosen in the portal settings, with any missing pages at the end. */
+private fun resolvePageOrder(names: List<String>): List<PortalPage> {
+    val chosen = names.mapNotNull { name -> PortalPage.entries.firstOrNull { it.name == name } }.distinct()
+    return chosen + PortalPage.entries.filter { it !in chosen }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
@@ -278,7 +283,8 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
         )
     }
 
-    val pagerState = rememberPagerState(pageCount = { PortalPage.entries.size })
+    val pageOrder = remember(portalSettings.pageOrder) { resolvePageOrder(portalSettings.pageOrder) }
+    val pagerState = rememberPagerState(pageCount = { pageOrder.size })
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -288,6 +294,7 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             PortalTopBar(
+                pages = pageOrder,
                 currentPage = pagerState.currentPage,
                 selectedSlotLabel = slotLabel(selectedSlot),
                 isSwapping = isSwapping,
@@ -301,7 +308,7 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
                     .weight(1f)
                     .fillMaxWidth(),
             ) { page ->
-                when (PortalPage.entries[page]) {
+                when (pageOrder[page]) {
                     PortalPage.PORTAL -> PortalPageContent(
                         slots = slots,
                         slotPaths = slotPaths,
@@ -434,7 +441,7 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
     }
 }
 
-private const val MAX_RECENT = 12
+private const val MAX_RECENT = 20
 private const val TIP_DURATION_MS = 4500L
 
 @Composable
@@ -453,6 +460,7 @@ private fun FloatingMessage(text: String, color: Color, textColor: Color) {
 /** Page tabs, the slot that tapped figures go to, and the settings button. */
 @Composable
 private fun PortalTopBar(
+    pages: List<PortalPage>,
     currentPage: Int,
     selectedSlotLabel: String,
     isSwapping: Boolean,
@@ -460,7 +468,7 @@ private fun PortalTopBar(
     onSettings: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        PortalPage.entries.forEachIndexed { index, page ->
+        pages.forEachIndexed { index, page ->
             val isCurrent = index == currentPage
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -503,7 +511,7 @@ private fun PortalTopBar(
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
-                .clickable { onPageSelected(PortalPage.PORTAL.ordinal) }
+                .clickable { onPageSelected(pages.indexOf(PortalPage.PORTAL).coerceAtLeast(0)) }
                 .padding(horizontal = 6.dp, vertical = 4.dp),
         )
         IconButton(onClick = onSettings, modifier = Modifier.size(36.dp)) {
@@ -679,36 +687,63 @@ private fun CollectionPageContent(
     }
 }
 
-/** The recent page: figures recently used in this game, then favourites. */
+/**
+ * The recent page: figures recently used in this game, then favourites. Each is one row that
+ * scrolls sideways, so both stay on screen however many figures they hold.
+ */
 @Composable
 private fun RecentPageContent(
     recentFigures: List<PortalFigure>,
     favouriteFigures: List<PortalFigure>,
     figureCard: @Composable (PortalFigure) -> Unit,
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 104.dp),
-        modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader(tr("Recently used")) {} }
-        if (recentFigures.isEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                EmptyMessage(tr("Figures you place in this game show up here."))
-            }
-        }
-        items(recentFigures, key = { "recent:" + it.installed.path }) { figure -> figureCard(figure) }
+        FigureRowSection(
+            title = tr("Recently used"),
+            figures = recentFigures,
+            emptyText = tr("Figures you place in this game show up here."),
+            keyPrefix = "recent:",
+            figureCard = figureCard,
+        )
+        FigureRowSection(
+            title = tr("★ Favourites"),
+            figures = favouriteFigures,
+            emptyText = tr("Tap the star on a figure to add it here."),
+            keyPrefix = "favourite:",
+            figureCard = figureCard,
+        )
+    }
+}
 
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            SectionHeader(tr("★ Favourites")) {}
+private val ROW_CARD_WIDTH = 112.dp
+
+/** A titled row of figure cards that scrolls sideways. */
+@Composable
+private fun FigureRowSection(
+    title: String,
+    figures: List<PortalFigure>,
+    emptyText: String,
+    keyPrefix: String,
+    figureCard: @Composable (PortalFigure) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SectionHeader(if (figures.isEmpty()) title else "$title (${figures.size})") {}
+        if (figures.isEmpty()) {
+            EmptyMessage(emptyText)
+            return@Column
         }
-        if (favouriteFigures.isEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                EmptyMessage(tr("Tap the star on a figure to add it here."))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(figures, key = { keyPrefix + it.installed.path }) { figure ->
+                Box(modifier = Modifier.width(ROW_CARD_WIDTH)) {
+                    figureCard(figure)
+                }
             }
         }
-        items(favouriteFigures, key = { "favourite:" + it.installed.path }) { figure -> figureCard(figure) }
     }
 }
 
@@ -902,6 +937,10 @@ private fun PortalSettingsPanel(
             description = tr("Draw the Portal of Power above the slots. Turn off to leave more room for the slots and teams."),
             checked = settings.isPortalVisible,
             onCheckedChange = { checked -> onChange { it.copy(isPortalVisible = checked) } },
+        )
+        PageOrderSetting(
+            pages = resolvePageOrder(settings.pageOrder),
+            onOrderChange = { order -> onChange { it.copy(pageOrder = order.map(PortalPage::name)) } },
         )
         TextButton(onClick = onRefresh) { Text(tr("Reload figures and card art")) }
     }
@@ -1789,5 +1828,41 @@ private fun TeamsRow(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/** Lets the pages be moved up and down. The first page is the one the portal opens on. */
+@Composable
+private fun PageOrderSetting(pages: List<PortalPage>, onOrderChange: (List<PortalPage>) -> Unit) {
+    fun move(from: Int, to: Int) {
+        if (to !in pages.indices) return
+        onOrderChange(pages.toMutableList().apply { add(to, removeAt(from)) })
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(text = tr("Page order"), style = MaterialTheme.typography.bodyLarge, color = Color.White)
+        Text(
+            text = tr("The first page is the one the portal opens on."),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        pages.forEachIndexed { index, page ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "${index + 1}. ${tr(page.label)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(enabled = index > 0, onClick = { move(index, index - 1) }) { Text("▲") }
+                TextButton(enabled = index < pages.lastIndex, onClick = { move(index, index + 1) }) { Text("▼") }
+            }
+        }
     }
 }

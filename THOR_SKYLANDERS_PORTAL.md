@@ -34,7 +34,8 @@ The portal screen has three pages. Swipe left and right, or tap the page names a
 - **Collection:** every figure that works in the game you're playing, with **Sort** (tap to switch
   between A-Z, element, game and recently used) and **Filters** (Main roster / Variants / All
   versions, type and element), and an A-Z bar down the side when sorted A-Z.
-- **Recent:** the figures you last used in this game, then your favourites. Recently used figures
+- **Recent:** the figures you last used in this game, then your favourites, each as a row that
+  scrolls sideways, so both stay on screen however many you have. Recently used figures
   are saved per game straight away, so they're still there next time you play. Only the last 30 per
   game are kept.
 
@@ -44,6 +45,7 @@ settings**:
 
 - **Portal glow:** turn the glowing, animated centre off for an unlit portal with no animation.
 - **Show portal:** hide the drawn portal to leave more room for the slots and teams.
+- **Page order:** move pages up or down. The first page is the one the portal opens on.
 - **Reload figures and card art.**
 
 Other details:
