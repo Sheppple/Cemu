@@ -120,7 +120,18 @@ show the format; they are not real stats:
 }
 ```
 
-The file ships empty, so figures show "not in the stats table yet" until it's filled in.
+The file has level-1 base stats for 160 characters, taken from the stat boxes on
+skylanders.fandom.com. Each entry holds the stats from the character's debut game, so Imaginators
+figures use that game's smaller scale. Some entries are partial because the wiki only lists some
+stats (most Imaginators Senseis have only Max health). There are no per-variant entries yet.
+
+These 37 have no stats on the wiki, so they show "not in the stats table yet": Gusto, Wildfire,
+Deja Vu, Bushwhack, Krypt King, Weeruptor, Pet Vac, Small Fry, Gill Runt, Barkley, Thumpling,
+King Pen, Tri-Tip, Chopscotch, Pit Boss, Air Strike, Ember, Ambush, Dr. Krankcase, Hood Sickle,
+Golden Queen, Wolfgang, Pain-Yatta, Starcast, Buckshot, Chompy Mage, Bad Juju, Grave Clobber,
+Blaster-Tron, Chain Reaction, Kaos, Tidepool, Dr. Neo Cortex, Bumble Blast, Grim Creeper, Rip Tide
+and Hammer Slam Bowser (whose wiki entry is all zeros). The scraper is
+`SkylandersArt/scripts/stats.py` on the dev machine.
 
 ### Trap Team villains
 
