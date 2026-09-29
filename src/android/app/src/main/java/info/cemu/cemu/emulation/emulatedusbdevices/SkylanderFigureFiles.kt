@@ -213,6 +213,29 @@ fun loadSkylanderArt(assets: AssetManager, figure: PortalFigure, artFile: File?)
     return art?.also { artCache.put(cacheKey, it) }
 }
 
+/**
+ * App assets folder with round character icons for figures standing on the portal: `<id>.webp` per
+ * character, plus `<id>_<variant>.webp` for variants that have their own icon (e.g. Dark Spyro).
+ */
+private const val BUNDLED_ICON_DIR = "skylanders_icons"
+
+/**
+ * Decodes the bundled portal icon for [figure]: its variant's own icon, else its character's.
+ * Returns null for figures without one (traps, items, vehicles). Does IO.
+ */
+fun loadSkylanderIcon(assets: AssetManager, figure: PortalFigure): ImageBitmap? {
+    val key = figure.artKey ?: return null
+    artCache.get("icon:$key")?.let { return it }
+    val icon = listOf(key, key.substringBefore('_')).firstNotNullOfOrNull { candidate ->
+        try {
+            assets.open("$BUNDLED_ICON_DIR/$candidate.webp").use(BitmapFactory::decodeStream)?.asImageBitmap()
+        } catch (_: IOException) {
+            null
+        }
+    }
+    return icon?.also { artCache.put("icon:$key", it) }
+}
+
 fun decodeSkylanderArt(file: File): ImageBitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.path, bounds)

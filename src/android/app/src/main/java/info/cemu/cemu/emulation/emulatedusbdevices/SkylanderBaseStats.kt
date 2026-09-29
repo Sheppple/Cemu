@@ -10,6 +10,9 @@ data class SkylanderBaseStats(
     val armor: Int?,
     val criticalHit: Int?,
     val elementalPower: Int?,
+    /** Imaginators only: that game has Attack and Luck instead of Critical hit and Elemental power. */
+    val attack: Int? = null,
+    val luck: Int? = null,
 )
 
 /**
@@ -21,6 +24,8 @@ data class SkylanderBaseStats(
  * ```
  * { "000E": { "health": 270, "speed": 43, "armor": 18, "critical": 30, "elemental": 25 } }
  * ```
+ *
+ * Imaginators figures use that game's stats instead: "health", "attack", "armor", "speed", "luck".
  *
  * Figures without an entry show no base stats.
  */
@@ -44,6 +49,8 @@ object SkylanderBaseStatsTable {
                     armor = stat("armor"),
                     criticalHit = stat("critical"),
                     elementalPower = stat("elemental"),
+                    attack = stat("attack"),
+                    luck = stat("luck"),
                 )
             }
         }.getOrDefault(emptyMap())

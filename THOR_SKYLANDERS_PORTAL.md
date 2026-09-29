@@ -81,12 +81,23 @@ Turn it off to give the second display back to the GamePad (**External PAD scree
 
 ### Card art
 
-Art for about 700 figures and variants is bundled in `app/src/main/assets/skylanders_art/` (8 MB
-of 256 px WebP images, taken from skylanderscharacterlist.com). Each file is named after the
-figure's id and variant in 4-digit hex, as read from the figure file: `0010_0000.webp` is Spyro.
-Both Cemu's and Dolphin's variant codes are covered, because they differ for some figures. The
-scripts that built the set, and a manifest of which figure each file is, live outside the repo in
-`SkylandersArt/` on the dev machine.
+Art for about 700 figures and variants is bundled in `app/src/main/assets/skylanders_art/` (11 MB
+of 256 px WebP images). Each file is named after the figure's id and variant in 4-digit hex, as
+read from the figure file: `0010_0000.webp` is Spyro. Both Cemu's and Dolphin's variant codes are
+covered, because they differ for some figures.
+
+- Characters (about 500 files) use the infobox image from their page on skylanders.fandom.com.
+  Variants with their own wiki page (Dark Spyro, Legendary Chop Chop, …) use that page's image,
+  and the rest use their character's.
+- Traps, magic items, vehicles and trophies use figure photos from skylanderscharacterlist.com.
+
+Figures standing on the drawn Portal of Power show a round character icon instead, from
+`app/src/main/assets/skylanders_icons/` (the `<Name> Icon.png` images the wiki uses on its
+character lists). Files are named `<id>.webp` per character, plus `<id>_<variant>.webp` for variants
+with their own icon. Figures without an icon show their card art there.
+
+The scripts that built both sets, and manifests of which figure each file is and where it came
+from, live outside the repo in `SkylandersArt/` on the dev machine.
 
 To use your own pictures, add images to an `art` folder next to the figures. They win over the
 bundled art. Each image can be named after the figure file, the figure's name, its id and variant
@@ -120,18 +131,21 @@ show the format; they are not real stats:
 }
 ```
 
-The file has level-1 base stats for 160 characters, taken from the stat boxes on
-skylanders.fandom.com. Each entry holds the stats from the character's debut game, so Imaginators
-figures use that game's smaller scale. Some entries are partial because the wiki only lists some
-stats (most Imaginators Senseis have only Max health). There are no per-variant entries yet.
+Imaginators has different stats, so its figures use "health", "attack", "armor", "speed" and
+"luck", and the panel shows Attack and Luck for them instead of Critical hit and Elemental power.
 
-These 37 have no stats on the wiki, so they show "not in the stats table yet": Gusto, Wildfire,
-Deja Vu, Bushwhack, Krypt King, Weeruptor, Pet Vac, Small Fry, Gill Runt, Barkley, Thumpling,
-King Pen, Tri-Tip, Chopscotch, Pit Boss, Air Strike, Ember, Ambush, Dr. Krankcase, Hood Sickle,
-Golden Queen, Wolfgang, Pain-Yatta, Starcast, Buckshot, Chompy Mage, Bad Juju, Grave Clobber,
-Blaster-Tron, Chain Reaction, Kaos, Tidepool, Dr. Neo Cortex, Bumble Blast, Grim Creeper, Rip Tide
-and Hammer Slam Bowser (whose wiki entry is all zeros). The scraper is
-`SkylandersArt/scripts/stats.py` on the dev machine.
+The file has level-1 base stats for 196 of the 197 characters, from the character's debut game:
+
+- 129 from the stat boxes on skylanders.fandom.com.
+- All 30 Imaginators-only characters (Senseis, Crash, Cortex, Kaos) and 5 Trap Team Minis from
+  darkSpyro.net's stats tables (via the Internet Archive, as the live site refused connections).
+- 6 from skylanderswiki.com: Gusto, Wildfire, Déjà Vu, Bushwhack, Krypt King and Barkley.
+- 3 from SkylanderNutts' in-game stats: Rip Tide, Grim Creeper and Bumble Blast.
+
+Hammer Slam Bowser is the only one missing: no source had his stats. Where darkSpyro and the Fandom
+wiki both have a character they mostly agree, except that darkSpyro gives 25 Elemental power for
+every Spyro's Adventure character where the wiki gives 25-46; the wiki's numbers are kept. There
+are no per-variant entries yet. The scrapers are in `SkylandersArt/scripts/` on the dev machine.
 
 ### Trap Team villains
 

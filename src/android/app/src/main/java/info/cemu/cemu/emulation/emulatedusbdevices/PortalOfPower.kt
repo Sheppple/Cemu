@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,16 +31,21 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.PI
 import kotlin.math.cos
@@ -165,6 +171,27 @@ private fun rememberGlowAnimation(isRunning: Boolean): Pair<State<Float>, State<
 
 @Composable
 private fun FigurePortrait(figure: PortalFigure, artFile: File?, size: Dp, onClick: () -> Unit) {
+    val assets = LocalContext.current.assets
+    val icon by produceState<ImageBitmap?>(null, figure.artKey) {
+        value = withContext(Dispatchers.IO) { runCatching { loadSkylanderIcon(assets, figure) }.getOrNull() }
+    }
+
+    val currentIcon = icon
+    if (currentIcon != null) {
+        // Character icons are already round and ringed in their element's colour.
+        Image(
+            bitmap = currentIcon,
+            contentDescription = figure.name,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .size(size)
+                .clip(CircleShape)
+                .clickable(onClick = onClick),
+        )
+        return
+    }
+
+    // Figures without an icon (traps, items, vehicles) show their card art.
     Box(
         modifier = Modifier
             .size(size)

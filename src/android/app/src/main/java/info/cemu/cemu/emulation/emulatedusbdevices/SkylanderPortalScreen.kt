@@ -1510,10 +1510,12 @@ private fun BaseStatsSection(stats: SkylanderBaseStats?) {
             return@InfoSection
         }
         stats.maxHealth?.let { StatRow(tr("Max health"), it.toString()) }
+        stats.attack?.let { StatRow(tr("Attack"), it.toString()) }
         stats.speed?.let { StatRow(tr("Speed"), it.toString()) }
         stats.armor?.let { StatRow(tr("Armor"), it.toString()) }
         stats.criticalHit?.let { StatRow(tr("Critical hit"), it.toString()) }
         stats.elementalPower?.let { StatRow(tr("Elemental power"), it.toString()) }
+        stats.luck?.let { StatRow(tr("Luck"), it.toString()) }
     }
 }
 
