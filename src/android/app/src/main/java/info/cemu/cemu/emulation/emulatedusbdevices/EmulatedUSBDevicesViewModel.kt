@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import info.cemu.cemu.common.coroutines.RefreshableStateFlow
 import info.cemu.cemu.common.settings.AppSettingsStore
+import info.cemu.cemu.common.settings.SkylanderPortalSettings
+import info.cemu.cemu.nativeinterface.NativeEmulation
 import info.cemu.cemu.common.settings.SkylanderTeam
 import info.cemu.cemu.common.settings.SkylanderTeamFigure
 import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices
@@ -266,20 +268,47 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
         recordSkylanderUsed(figure.path)
     }
 
+    /**
+     * The Skylanders game that is running, detected from the title name once a game is running.
+     * Recently used figures are kept per game.
+     */
+    val runningSkylanderGame: SkylanderGame? by lazy {
+        runCatching { SkylanderVersions.gameForTitle(NativeEmulation.getForegroundTitleName()) }.getOrNull()
+    }
+
+    private val lastUsedGameKey: String get() = runningSkylanderGame?.name ?: "ANY"
+
+    /** When each figure file was last placed while playing the running game. */
     val skylanderLastUsed = AppSettingsStore.dataStore.data
-        .map { it.skylanderLastUsed }
+        .map { it.skylanderLastUsedByGame[lastUsedGameKey].orEmpty() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
+    /**
+     * Records that a figure was placed. This is saved to the app settings straight away, so the
+     * recently used list survives closing the game. Only the latest few per game are kept.
+     */
     private fun recordSkylanderUsed(path: String) {
         val now = System.currentTimeMillis()
+        val gameKey = lastUsedGameKey
         viewModelScope.launch {
             AppSettingsStore.dataStore.updateData { settings ->
-                // Keep only the most recent figures so the settings file stays small.
-                val lastUsed = (settings.skylanderLastUsed + (path to now)).entries
+                val forGame = (settings.skylanderLastUsedByGame[gameKey].orEmpty() + (path to now)).entries
                     .sortedByDescending { it.value }
-                    .take(MAX_LAST_USED)
+                    .take(MAX_LAST_USED_PER_GAME)
                     .associate { it.key to it.value }
-                settings.copy(skylanderLastUsed = lastUsed)
+                settings.copy(skylanderLastUsedByGame = settings.skylanderLastUsedByGame + (gameKey to forGame))
+            }
+        }
+    }
+
+    val skylanderPortalSettings = AppSettingsStore.dataStore.data
+        .map { it.skylanderPortalSettings }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SkylanderPortalSettings())
+
+    fun updateSkylanderPortalSettings(update: (SkylanderPortalSettings) -> SkylanderPortalSettings) {
+        viewModelScope.launch {
+            AppSettingsStore.dataStore.updateData { settings ->
+                settings.copy(skylanderPortalSettings = update(settings.skylanderPortalSettings))
             }
         }
     }
@@ -315,6 +344,6 @@ class EmulatedUSBDevicesViewModel : ViewModel() {
 
     companion object {
         const val SKYLANDER_SWAP_DELAY_MS = 500L
-        private const val MAX_LAST_USED = 200
+        private const val MAX_LAST_USED_PER_GAME = 30
     }
 }

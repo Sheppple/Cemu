@@ -25,45 +25,43 @@ then install this build.
 
 ### Portal screen
 
-- **Portal ring:** the slots sit on a drawn portal whose ring takes the colours the game sets on
-  the portal's lights, the way a real portal lights up. It flashes when figures go on or come off.
-  It doesn't animate otherwise, so it doesn't slow the game down.
-- **Teams:** the teams button shows your saved teams. **+ Save team** saves the figures currently
-  on the portal. Tap a team to swap it onto the portal. Long-press a team, then tap it again, to
-  delete it.
-- **Slots:** Player 1, Player 2, Trap and Magic Item are always shown. **More** shows the other
-  twelve, with a count of any that are in use.
-- **Automatic slots:** traps always go to the Trap slot, and magic items and trophies to the Magic
-  Item slot. Swap Force halves go to the next free slot, so both halves can be on the portal
-  together. Everything else goes to the selected slot.
-- **Names and elements:** each card shows the figure's real name, read from the figure file, and
-  is coloured by its element. When the file name is different from the figure's name, the file name
-  is shown underneath.
-- **Main roster:** the grid shows one entry per character, using its latest normal Series:
-  S4 > S3 > S2 > S1. Eon's Elite never counts as the main version, because its stats are much
-  stronger than the normal releases. Earlier Series, Eon's Elite, Legendary, Dark, LightCore,
-  Chase, Holiday and other special editions are variants, and appear under **Variants** or **All
-  versions** in the filters. Traps, magic items and vehicles are never merged, because different
-  traps share one figure id. Cards show the Series number. The rules are in `SkylanderVersions.kt`.
-- **Only figures for the game you're playing:** the portal detects the running Skylanders game
-  from its title and only shows figures that work in it. Characters are shown if they debuted in
-  that game or an earlier one, including all their later Series. Traps, magic items and vehicles are
-  shown if they came out in that game or earlier. The first row of the filters shows the detected
-  game and lets you pick a different game, or **Any game**.
-- **Favourites:** tap the star on a card to make it a favourite, and tap **★ Favourites** above the
-  grid to see only your favourites. Favourites are per character, so they carry over between a
-  character's Series and variants.
-- **Details and versions:** long-press a card for its details panel. It shows the figure's art,
-  element, game and Series, and the progress saved on it: nickname, gold, play time, hero level
-  and when it was last placed. The character level isn't shown yet. The panel also lists every
-  version of the character, with **Place** for installed versions and **Create** for the rest.
-  Tap a version to see its details.
-- **Sorting and the A-Z bar:** the filters include **Sort: A-Z / Element / Game / Recently used**.
-  With A-Z, a letter bar down the right of the grid jumps to the first figure starting with a
-  letter. You can tap it or drag along it.
-- **Filters:** the filter button shows rows of chips for type (Traps, Vehicles, Giants, Swappers…),
-  element and game. Only filters that match at least one of your figures are shown.
-- **Theme:** black background with gold highlights, to suit the AMOLED bottom screen.
+The portal screen has three pages. Swipe left and right, or tap the page names at the top:
+
+- **Portal:** a drawn Portal of Power, with a ring of stone bricks and rune marks around a glowing
+  centre, and the figures on the portal standing in it. The glow takes the colour the game sets on
+  the portal's lights, and flashes when figures go on or come off. Below it are the slots and your
+  saved teams.
+- **Collection:** every figure that works in the game you're playing, with **Sort** (tap to switch
+  between A-Z, element, game and recently used) and **Filters** (Main roster / Variants / All
+  versions, type and element), and an A-Z bar down the side when sorted A-Z.
+- **Recent:** the figures you last used in this game, then your favourites. Recently used figures
+  are saved per game straight away, so they're still there next time you play. Only the last 30 per
+  game are kept.
+
+A short tip appears when the portal opens, then fades out. The arrow at the top right shows which
+slot tapped figures go to; tap it to go back to the portal page. The gear button opens **Portal
+settings**:
+
+- **Portal glow:** turn the glowing, animated centre off for an unlit portal with no animation.
+- **Show portal:** hide the drawn portal to leave more room for the slots and teams.
+- **Reload figures and card art.**
+
+Other details:
+
+- **Only figures for the game you're playing:** the portal detects the running Skylanders game from
+  its title and only shows figures that work in it. Characters show if they debuted in that game or
+  an earlier one, including all their later Series. Traps, magic items and vehicles show if they
+  came out in that game or earlier. If the game can't be detected, everything is shown.
+- **Main roster:** one entry per character, using its latest normal Series: S4 > S3 > S2 > S1.
+  Eon's Elite never counts as the main version, because its stats are much stronger than the
+  normal releases. Earlier Series and special editions are variants, and appear under the
+  **Variants** or **All versions** filter.
+- **Favourites:** tap the star on a card. Favourites are per character.
+- **Details and versions:** long-press a card for its details, saved progress (nickname, gold,
+  play time, hero level, last placed) and every version of the character, with **Place** or
+  **Create**.
+- **Slots:** Player 1, Player 2, Trap and Magic Item; **More** shows the other twelve. Traps and
+  magic items go to their own slots, and Swap Force halves go to the next free slot.
 
 The in-game side menu has a **Skylanders portal on external screen** toggle. It is on by default.
 Turn it off to give the second display back to the GamePad (**External PAD screen**). The regular

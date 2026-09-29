@@ -1,35 +1,25 @@
 package info.cemu.cemu.emulation.emulatedusbdevices
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.withTransform
-import info.cemu.cemu.common.settings.SkylanderTeam
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
-import kotlinx.coroutines.launch
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -42,11 +32,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,6 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -67,6 +65,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -76,7 +75,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -86,30 +87,32 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import info.cemu.cemu.R
+import info.cemu.cemu.common.settings.SkylanderPortalSettings
+import info.cemu.cemu.common.settings.SkylanderTeam
 import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices
-import info.cemu.cemu.nativeinterface.NativeEmulation
-import info.cemu.cemu.nativeinterface.NativeEmulatedUSBDevices.InstalledFigure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Touch-first Skylanders portal meant to fill a secondary display: a row of portal slots, optional
- * filters and a grid of installed figures. Tapping a figure places it on the portal (swapping out
- * whatever is on its slot); tapping a figure that is already on the portal removes it.
+ * Touch-first Skylanders portal meant to fill a secondary display. It has three pages, swiped
+ * between:
+ * - Portal: a drawn Portal of Power with the figures on it, the portal slots and saved teams.
+ * - Collection: every figure that works in the running game, with sorting, filters and an A-Z bar.
+ * - Recent: figures recently used in this game, and favourites.
+ *
+ * Tapping a figure places it on the portal (swapping out whatever is on its slot); tapping a figure
+ * that is already on the portal removes it. Long-pressing a figure shows its details, saved
+ * progress and other versions.
  *
  * Traps and magic items go to their own slots. Swap Force halves go to the next free slot so that
  * both halves can be on the portal together. Everything else goes to the selected slot.
  *
- * Figures are shown with the name, element, game and type stored in the figure file (see
- * [SkylanderCatalog]). Card art is read from `<figures dir>/art/<file name or figure name>.png`
- * (or jpg/jpeg/webp) when present, then from the art bundled in the `skylanders_art` assets, with a
- * generated placeholder otherwise.
- *
  * Runs in a non-focusable window (see [SkylanderPortalPresentation]), so it deliberately avoids
- * dialogs, popups and text input.
+ * dialogs, popups and text input; panels are drawn inside the window instead.
  */
 @Composable
 fun SkylanderPortalScreen(viewModel: EmulatedUSBDevicesViewModel = viewModel()) {
@@ -148,39 +151,43 @@ private fun targetSlot(figure: PortalFigure, selectedSlot: Int, slots: Array<Str
         else -> selectedSlot
     }
 
+/** The pages of the portal screen, swiped between. */
+private enum class PortalPage(val label: String) {
+    PORTAL("Portal"),
+    COLLECTION("Collection"),
+    RECENT("Recent"),
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
     val slots by viewModel.skylanderSlots.state.collectAsState()
     val slotPaths by viewModel.skylanderSlotPaths.collectAsState()
     val installedFigures by viewModel.installedSkylanderFigures.state.collectAsState()
     val isSwapping by viewModel.isSwappingSkylander.collectAsState()
-    val scope = rememberCoroutineScope()
-    var selectedSlot by rememberSaveable { mutableIntStateOf(PLAYER_1_SLOT) }
-    var showAllSlots by rememberSaveable { mutableStateOf(false) }
-    var showFilters by rememberSaveable { mutableStateOf(false) }
-    var showTeams by rememberSaveable { mutableStateOf(false) }
-    var artVersion by remember { mutableIntStateOf(0) }
     val teams by viewModel.skylanderTeams.collectAsState()
-    var typeFilter by rememberSaveable { mutableStateOf<SkylanderType?>(null) }
-    var elementFilter by rememberSaveable { mutableStateOf<SkylanderElement?>(null) }
-    var gameFilter by rememberSaveable { mutableStateOf<SkylanderGame?>(null) }
-    var versionFilter by rememberSaveable { mutableStateOf(VersionFilter.MAIN) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
     val favourites by viewModel.skylanderFavourites.collectAsState()
     val lastUsed by viewModel.skylanderLastUsed.collectAsState()
+    val portalSettings by viewModel.skylanderPortalSettings.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    var selectedSlot by rememberSaveable { mutableIntStateOf(PLAYER_1_SLOT) }
+    var showAllSlots by rememberSaveable { mutableStateOf(false) }
+    var typeFilter by rememberSaveable { mutableStateOf<SkylanderType?>(null) }
+    var elementFilter by rememberSaveable { mutableStateOf<SkylanderElement?>(null) }
+    var versionFilter by rememberSaveable { mutableStateOf(VersionFilter.MAIN) }
     var sortOrder by rememberSaveable { mutableStateOf(SortOrder.NAME) }
     // The figure whose details and versions are shown, by file path. Opened with a long press.
     var detailsPath by rememberSaveable { mutableStateOf<String?>(null) }
-    val gridState = rememberLazyGridState()
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var artVersion by remember { mutableIntStateOf(0) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showTip by remember { mutableStateOf(true) }
 
-    // Only figures that work in the running game are shown. The game is detected from the running
-    // title, and can be changed in the filters.
-    val detectedGame = remember {
-        runCatching { SkylanderVersions.gameForTitle(NativeEmulation.getForegroundTitleName()) }.getOrNull()
-    }
-    var isGameAuto by rememberSaveable { mutableStateOf(true) }
-    var chosenGame by rememberSaveable { mutableStateOf<SkylanderGame?>(null) }
-    val playingGame = if (isGameAuto) detectedGame else chosenGame
+    // Only figures that work in the running game are ever shown. If the game can't be detected,
+    // everything is shown.
+    val playingGame = viewModel.runningSkylanderGame
 
     val names = remember { skylanderFigureNames() }
     val figures by produceState(emptyList(), installedFigures) {
@@ -190,32 +197,36 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
         value = withContext(Dispatchers.IO) { runCatching { loadSkylanderArtIndex() }.getOrDefault(emptyMap()) }
     }
     val figuresByPath = remember(figures) { figures.associateBy { it.installed.path } }
-    val filteredFigures = remember(
-        figures, typeFilter, elementFilter, gameFilter, versionFilter, favourites, playingGame,
-        sortOrder, lastUsed,
-    ) {
-        val matching = figures.filter { figure ->
-            (playingGame == null || figure.isAvailableIn(playingGame)) &&
-                (typeFilter == null || figure.info?.type == typeFilter) &&
+    val availableFigures = remember(figures, playingGame) {
+        figures.filter { playingGame == null || it.isAvailableIn(playingGame) }
+    }
+    val collection = remember(availableFigures, typeFilter, elementFilter, versionFilter, sortOrder, lastUsed) {
+        val matching = availableFigures.filter { figure ->
+            (typeFilter == null || figure.info?.type == typeFilter) &&
                 (elementFilter == null || figure.element == elementFilter) &&
-                (gameFilter == null || figure.info?.game == gameFilter) &&
                 when (versionFilter) {
                     VersionFilter.MAIN -> figure.isMainVersion
-                    VersionFilter.FAVOURITES -> figure.favouriteKey in favourites
                     VersionFilter.VARIANTS -> !figure.isMainVersion
                     VersionFilter.ALL -> true
                 }
         }
-        val shown = if (versionFilter == VersionFilter.FAVOURITES) {
-            // One card per favourite character: its main version if installed, else another one.
-            matching.groupBy { it.favouriteKey }
-                .map { (_, versions) -> versions.firstOrNull { it.isMainVersion } ?: versions.first() }
-        } else {
-            matching
-        }
-        sortFigures(shown, sortOrder, lastUsed)
+        sortFigures(matching, sortOrder, lastUsed)
     }
-    val isFiltered = typeFilter != null || elementFilter != null || gameFilter != null || !isGameAuto
+    val recentFigures = remember(availableFigures, lastUsed) {
+        val availablePaths = availableFigures.associateBy { it.installed.path }
+        lastUsed.entries.sortedByDescending { it.value }
+            .mapNotNull { availablePaths[it.key] }
+            .take(MAX_RECENT)
+    }
+    val favouriteFigures = remember(availableFigures, favourites) {
+        // One card per favourite character: its main version if installed, else another one.
+        availableFigures.filter { it.favouriteKey in favourites }
+            .groupBy { it.favouriteKey }
+            .map { (_, versions) -> versions.firstOrNull { it.isMainVersion } ?: versions.first() }
+            .sortedWith(compareBy({ it.name.lowercase() }, { it.installed.name.lowercase() }))
+    }
+    val filterCount = listOfNotNull(typeFilter, elementFilter).size +
+        (if (versionFilter != VersionFilter.MAIN) 1 else 0)
 
     LaunchedEffect(Unit) {
         // Figures may have been created or deleted since the view model was first used.
@@ -239,177 +250,408 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
         }
     }
 
+    LaunchedEffect(Unit) {
+        delay(TIP_DURATION_MS)
+        showTip = false
+    }
+
+    fun toggleFigure(figure: PortalFigure) {
+        val loadedSlot = slotPaths.indexOf(figure.installed.path).takeIf { it >= 0 }
+        if (loadedSlot != null) {
+            viewModel.clearSkylandersFigure(loadedSlot)
+        } else {
+            viewModel.placeSkylanderFigure(figure.installed, targetSlot(figure, selectedSlot, slots))
+        }
+    }
+
+    @Composable
+    fun figureCard(figure: PortalFigure) {
+        FigureCard(
+            figure = figure,
+            artFile = artIndex.findArt(figure),
+            loadedSlot = slotPaths.indexOf(figure.installed.path).takeIf { it >= 0 },
+            isFavourite = figure.favouriteKey in favourites,
+            onToggleFavourite = { viewModel.toggleSkylanderFavourite(figure.favouriteKey) },
+            enabled = !isSwapping,
+            onClick = { toggleFigure(figure) },
+            onLongClick = { detailsPath = figure.installed.path },
+        )
+    }
+
+    val pagerState = rememberPagerState(pageCount = { PortalPage.entries.size })
+
     Box(modifier = Modifier.fillMaxSize()) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = tr("Portal of Power"),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            PortalTopBar(
+                currentPage = pagerState.currentPage,
+                selectedSlotLabel = slotLabel(selectedSlot),
+                isSwapping = isSwapping,
+                onPageSelected = { page -> scope.launch { pagerState.animateScrollToPage(page) } },
+                onSettings = { showSettings = true },
             )
-            if (isSwapping) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .padding(start = 12.dp)
-                        .size(18.dp),
-                    strokeWidth = 2.dp,
-                )
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = { showFilters = !showFilters }) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_filter),
-                    contentDescription = tr("Filters"),
-                    tint = if (showFilters || isFiltered) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = { showTeams = !showTeams }) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_lists),
-                    contentDescription = tr("Teams"),
-                    tint = if (showTeams) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            IconButton(onClick = {
-                viewModel.installedSkylanderFigures.refresh()
-                artVersion++
-            }) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_refresh),
-                    contentDescription = tr("Refresh"),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            TextButton(
-                enabled = !isSwapping && slots.any { it != null },
-                onClick = viewModel::clearAllSkylanderFigures,
-            ) {
-                Text(tr("Clear all"))
+
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) { page ->
+                when (PortalPage.entries[page]) {
+                    PortalPage.PORTAL -> PortalPageContent(
+                        slots = slots,
+                        slotPaths = slotPaths,
+                        figuresByPath = figuresByPath,
+                        artIndex = artIndex,
+                        teams = teams,
+                        selectedSlot = selectedSlot,
+                        showAllSlots = showAllSlots,
+                        isSwapping = isSwapping,
+                        portalSettings = portalSettings,
+                        onSelectSlot = { selectedSlot = it },
+                        onClearSlot = viewModel::clearSkylandersFigure,
+                        onClearAll = viewModel::clearAllSkylanderFigures,
+                        onToggleAllSlots = {
+                            showAllSlots = !showAllSlots
+                            if (!showAllSlots && selectedSlot >= NAMED_SLOT_COUNT) {
+                                selectedSlot = PLAYER_1_SLOT
+                            }
+                        },
+                        onSaveTeam = { viewModel.saveSkylanderTeam() },
+                        onLoadTeam = viewModel::loadSkylanderTeam,
+                        onDeleteTeam = viewModel::deleteSkylanderTeam,
+                    )
+
+                    PortalPage.COLLECTION -> CollectionPageContent(
+                        figures = collection,
+                        hasAnyFigures = figures.isNotEmpty(),
+                        sortOrder = sortOrder,
+                        filterCount = filterCount,
+                        onCycleSort = {
+                            sortOrder = SortOrder.entries[(sortOrder.ordinal + 1) % SortOrder.entries.size]
+                        },
+                        onShowFilters = { showFilters = true },
+                        figureCard = { figureCard(it) },
+                    )
+
+                    PortalPage.RECENT -> RecentPageContent(
+                        recentFigures = recentFigures,
+                        favouriteFigures = favouriteFigures,
+                        figureCard = { figureCard(it) },
+                    )
+                }
             }
         }
 
-        val slotFigures = slotPaths.map { path -> path?.let(figuresByPath::get) }
+        // A short tip when the portal opens, instead of a hint line that takes up space.
+        AnimatedVisibility(
+            visible = showTip,
+            enter = fadeIn(),
+            exit = fadeOut(tween(800)),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp),
+        ) {
+            FloatingMessage(
+                text = tr("Swipe for your collection and favourites. Tap a figure to place it, long-press it for details."),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                textColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+
+        val error = errorMessage
+        AnimatedVisibility(
+            visible = error != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 52.dp, start = 16.dp, end = 16.dp),
+        ) {
+            FloatingMessage(
+                text = error ?: "",
+                color = MaterialTheme.colorScheme.errorContainer,
+                textColor = MaterialTheme.colorScheme.onErrorContainer,
+            )
+        }
+
+        val detailsFigure = detailsPath?.let(figuresByPath::get)
+        if (detailsFigure != null) {
+            FigureDetailsPanel(
+                figure = detailsFigure,
+                allFigures = figures,
+                names = names,
+                artIndex = artIndex,
+                slotPaths = slotPaths,
+                enabled = !isSwapping,
+                onPlace = { version ->
+                    viewModel.placeSkylanderFigure(version.installed, targetSlot(version, selectedSlot, slots))
+                    detailsPath = null
+                },
+                onRemove = { slot -> viewModel.clearSkylandersFigure(slot) },
+                onCreate = { id, variant -> viewModel.createSkylanderFigure(id, variant) },
+                onShowVersion = { version -> detailsPath = version.installed.path },
+                onDismiss = { detailsPath = null },
+            )
+        }
+
+        if (showFilters) {
+            FilterPanel(
+                figures = availableFigures,
+                versionFilter = versionFilter,
+                sortOrder = sortOrder,
+                typeFilter = typeFilter,
+                elementFilter = elementFilter,
+                onVersionFilterChange = { versionFilter = it },
+                onSortOrderChange = { sortOrder = it },
+                onTypeFilterChange = { typeFilter = it },
+                onElementFilterChange = { elementFilter = it },
+                onReset = {
+                    versionFilter = VersionFilter.MAIN
+                    sortOrder = SortOrder.NAME
+                    typeFilter = null
+                    elementFilter = null
+                },
+                onDismiss = { showFilters = false },
+            )
+        }
+
+        if (showSettings) {
+            PortalSettingsPanel(
+                settings = portalSettings,
+                onChange = viewModel::updateSkylanderPortalSettings,
+                onRefresh = {
+                    viewModel.installedSkylanderFigures.refresh()
+                    artVersion++
+                },
+                onDismiss = { showSettings = false },
+            )
+        }
+    }
+}
+
+private const val MAX_RECENT = 12
+private const val TIP_DURATION_MS = 4500L
+
+@Composable
+private fun FloatingMessage(text: String, color: Color, textColor: Color) {
+    Text(
+        text = text,
+        color = textColor,
+        style = MaterialTheme.typography.bodySmall,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .background(color.copy(alpha = 0.95f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    )
+}
+
+/** Page tabs, the slot that tapped figures go to, and the settings button. */
+@Composable
+private fun PortalTopBar(
+    currentPage: Int,
+    selectedSlotLabel: String,
+    isSwapping: Boolean,
+    onPageSelected: (Int) -> Unit,
+    onSettings: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        PortalPage.entries.forEachIndexed { index, page ->
+            val isCurrent = index == currentPage
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onPageSelected(index) }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = tr(page.label),
+                    fontSize = 14.sp,
+                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(top = 3.dp)
+                        .width(22.dp)
+                        .height(3.dp)
+                        .background(
+                            if (isCurrent) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            RoundedCornerShape(2.dp),
+                        ),
+                )
+            }
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        if (isSwapping) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .padding(end = 8.dp)
+                    .size(16.dp),
+                strokeWidth = 2.dp,
+            )
+        }
+        // Where tapped figures go; tapping it opens the portal page to change it.
+        Text(
+            text = "→ $selectedSlotLabel",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onPageSelected(PortalPage.PORTAL.ordinal) }
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+        )
+        IconButton(onClick = onSettings, modifier = Modifier.size(36.dp)) {
+            Icon(
+                painter = painterResource(R.drawable.ic_settings),
+                contentDescription = tr("Portal settings"),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** The portal page: the drawn Portal of Power, the slots and saved teams. */
+@Composable
+private fun PortalPageContent(
+    slots: Array<String?>,
+    slotPaths: List<String?>,
+    figuresByPath: Map<String, PortalFigure>,
+    artIndex: Map<String, File>,
+    teams: List<SkylanderTeam>,
+    selectedSlot: Int,
+    showAllSlots: Boolean,
+    isSwapping: Boolean,
+    portalSettings: SkylanderPortalSettings,
+    onSelectSlot: (Int) -> Unit,
+    onClearSlot: (Int) -> Unit,
+    onClearAll: () -> Unit,
+    onToggleAllSlots: () -> Unit,
+    onSaveTeam: () -> Unit,
+    onLoadTeam: (SkylanderTeam) -> Unit,
+    onDeleteTeam: (SkylanderTeam) -> Unit,
+) {
+    val slotFigures = slotPaths.map { path -> path?.let(figuresByPath::get) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (portalSettings.isPortalVisible) {
+            PortalOfPower(
+                figuresOnPortal = slotFigures.filterNotNull(),
+                artIndex = artIndex,
+                isGlowEnabled = portalSettings.isGlowEnabled,
+            )
+        }
+
+        SectionHeader(tr("On the portal")) {
+            TextButton(enabled = !isSwapping && slots.any { it != null }, onClick = onClearAll) {
+                Text(tr("Clear all"))
+            }
+        }
         PortalSlotsRow(
             slots = slots,
             slotFigures = slotFigures,
             selectedSlot = selectedSlot,
             showAllSlots = showAllSlots,
             enabled = !isSwapping,
-            onSelectSlot = { selectedSlot = it },
-            onClearSlot = viewModel::clearSkylandersFigure,
-            onToggleAllSlots = {
-                showAllSlots = !showAllSlots
-                if (!showAllSlots && selectedSlot >= NAMED_SLOT_COUNT) {
-                    selectedSlot = PLAYER_1_SLOT
-                }
-            },
+            onSelectSlot = onSelectSlot,
+            onClearSlot = onClearSlot,
+            onToggleAllSlots = onToggleAllSlots,
         )
 
-        if (showTeams) {
-            TeamsRow(
-                teams = teams,
-                canSave = slots.any { it != null },
-                enabled = !isSwapping,
-                onSave = { viewModel.saveSkylanderTeam() },
-                onLoad = viewModel::loadSkylanderTeam,
-                onDelete = viewModel::deleteSkylanderTeam,
-            )
+        SectionHeader(tr("Teams")) {}
+        TeamsRow(
+            teams = teams,
+            canSave = slots.any { it != null },
+            enabled = !isSwapping,
+            onSave = onSaveTeam,
+            onLoad = onLoadTeam,
+            onDelete = onDeleteTeam,
+        )
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String, actions: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f),
+        )
+        actions()
+    }
+}
+
+/** The collection page: every figure that works in the running game, with sort and filters. */
+@Composable
+private fun CollectionPageContent(
+    figures: List<PortalFigure>,
+    hasAnyFigures: Boolean,
+    sortOrder: SortOrder,
+    filterCount: Int,
+    onCycleSort: () -> Unit,
+    onShowFilters: () -> Unit,
+    figureCard: @Composable (PortalFigure) -> Unit,
+) {
+    val gridState = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
+    // Where each letter's first figure is in the grid, for the A-Z jump bar.
+    val letterIndex = remember(figures) {
+        buildMap {
+            figures.forEachIndexed { index, figure -> putIfAbsent(jumpLetter(figure.name), index) }
         }
+    }
 
-        VersionChips(selected = versionFilter, onSelectedChange = { versionFilter = it })
-
-        if (showFilters) {
-            PlayingGameChips(
-                detectedGame = detectedGame,
-                isAuto = isGameAuto,
-                chosenGame = chosenGame,
-                onAuto = { isGameAuto = true },
-                onChoose = {
-                    isGameAuto = false
-                    chosenGame = it
-                },
-            )
-            FilterRows(
-                figures = figures,
-                typeFilter = typeFilter,
-                elementFilter = elementFilter,
-                gameFilter = gameFilter,
-                onTypeFilterChange = { typeFilter = it },
-                onElementFilterChange = { elementFilter = it },
-                onGameFilterChange = { gameFilter = it },
-            )
-            SortChips(selected = sortOrder, onSelectedChange = { sortOrder = it })
-        }
-
-        val error = errorMessage
-        if (error != null) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = error,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(8.dp))
-                    .padding(8.dp),
-            )
-        } else {
-            val placeHint = tr(
-                "Tap a figure to place it on {0}. Traps and magic items go to their own slots. Tap a glowing figure to remove it.",
-                slotLabel(selectedSlot),
-            )
-            Text(
-                text = if (playingGame != null) {
-                    tr("Showing figures that work in {0}.", tr(playingGame.label)) + " " + placeHint
-                } else {
-                    placeHint
-                },
+                text = tr("{0} figures", figures.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            FilterChip(
+                selected = false,
+                onClick = onCycleSort,
+                label = { Text(tr("Sort: {0}", tr(sortOrder.label))) },
+                colors = portalChipColors(),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            FilterChip(
+                selected = filterCount > 0,
+                onClick = onShowFilters,
+                label = { Text(if (filterCount > 0) tr("Filters ({0})", filterCount) else tr("Filters")) },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_filter),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+                colors = portalChipColors(),
             )
         }
 
-        if (filteredFigures.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = when {
-                        figures.isEmpty() ->
-                            tr("No figures found. Create figures from the Emulated USB Devices menu.")
-
-                        versionFilter == VersionFilter.FAVOURITES ->
-                            tr("No favourites yet. Tap the star on a figure to add it here.")
-
-                        else -> tr("No figures match these filters.")
-                    },
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        if (figures.isEmpty()) {
+            EmptyMessage(
+                if (!hasAnyFigures) {
+                    tr("No figures found. Create figures from Settings → Emulated USB Devices.")
+                } else {
+                    tr("No figures match these filters.")
+                }
+            )
             return@Column
-        }
-
-        // Where each letter's first figure is in the grid, for the A-Z jump bar.
-        val letterIndex = remember(filteredFigures) {
-            buildMap {
-                filteredFigures.forEachIndexed { index, figure -> putIfAbsent(jumpLetter(figure.name), index) }
-            }
         }
 
         Row(modifier = Modifier.fillMaxSize()) {
@@ -422,31 +664,10 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(filteredFigures, key = { it.installed.path }) { figure ->
-                    val loadedSlot = slotPaths.indexOf(figure.installed.path).takeIf { it >= 0 }
-                    FigureCard(
-                        figure = figure,
-                        artFile = artIndex.findArt(figure),
-                        loadedSlot = loadedSlot,
-                        isFavourite = figure.favouriteKey in favourites,
-                        onToggleFavourite = { viewModel.toggleSkylanderFavourite(figure.favouriteKey) },
-                        enabled = !isSwapping,
-                        onClick = {
-                            if (loadedSlot != null) {
-                                viewModel.clearSkylandersFigure(loadedSlot)
-                            } else {
-                                viewModel.placeSkylanderFigure(
-                                    figure.installed,
-                                    targetSlot(figure, selectedSlot, slots),
-                                )
-                            }
-                        },
-                        onLongClick = { detailsPath = figure.installed.path },
-                    )
-                }
+                items(figures, key = { it.installed.path }) { figure -> figureCard(figure) }
             }
             // The jump bar only makes sense when the grid is in alphabetical order.
-            if (sortOrder == SortOrder.NAME && filteredFigures.size > 12) {
+            if (sortOrder == SortOrder.NAME && figures.size > 12) {
                 AlphabetJumpBar(
                     availableLetters = letterIndex.keys,
                     onJump = { letter ->
@@ -456,26 +677,261 @@ private fun PortalContent(viewModel: EmulatedUSBDevicesViewModel) {
             }
         }
     }
+}
 
-    val detailsFigure = detailsPath?.let(figuresByPath::get)
-    if (detailsFigure != null) {
-        FigureDetailsPanel(
-            figure = detailsFigure,
-            allFigures = figures,
-            names = names,
-            artIndex = artIndex,
-            slotPaths = slotPaths,
-            enabled = !isSwapping,
-            onPlace = { version ->
-                viewModel.placeSkylanderFigure(version.installed, targetSlot(version, selectedSlot, slots))
-                detailsPath = null
-            },
-            onRemove = { slot -> viewModel.clearSkylandersFigure(slot) },
-            onCreate = { id, variant -> viewModel.createSkylanderFigure(id, variant) },
-            onShowVersion = { version -> detailsPath = version.installed.path },
-            onDismiss = { detailsPath = null },
-        )
+/** The recent page: figures recently used in this game, then favourites. */
+@Composable
+private fun RecentPageContent(
+    recentFigures: List<PortalFigure>,
+    favouriteFigures: List<PortalFigure>,
+    figureCard: @Composable (PortalFigure) -> Unit,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 104.dp),
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader(tr("Recently used")) {} }
+        if (recentFigures.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                EmptyMessage(tr("Figures you place in this game show up here."))
+            }
+        }
+        items(recentFigures, key = { "recent:" + it.installed.path }) { figure -> figureCard(figure) }
+
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            SectionHeader(tr("★ Favourites")) {}
+        }
+        if (favouriteFigures.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                EmptyMessage(tr("Tap the star on a figure to add it here."))
+            }
+        }
+        items(favouriteFigures, key = { "favourite:" + it.installed.path }) { figure -> figureCard(figure) }
     }
+}
+
+@Composable
+private fun EmptyMessage(text: String) {
+    Text(
+        text = text,
+        textAlign = TextAlign.Center,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp, horizontal = 8.dp),
+    )
+}
+
+/**
+ * A panel over the screen, drawn inside the portal window rather than as a dialog, which would
+ * take input focus from the game. Tapping outside it closes it.
+ */
+@Composable
+private fun OverlayPanel(
+    title: String,
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f)
+                // Swallow taps so they don't reach the scrim and close the panel.
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 16.dp, end = 6.dp, top = 6.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(painter = painterResource(R.drawable.ic_close), contentDescription = tr("Close"))
+                }
+            }
+            // Scrollable, so every option can be reached on a short screen.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                content = content,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun <T> ChipGroup(
+    title: String,
+    options: List<T>,
+    isSelected: (T) -> Boolean,
+    label: (T) -> String,
+    onClick: (T) -> Unit,
+    dotColor: ((T) -> Color)? = null,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            options.forEach { option ->
+                FilterChip(
+                    selected = isSelected(option),
+                    onClick = { onClick(option) },
+                    label = { Text(label(option)) },
+                    leadingIcon = if (dotColor != null) {
+                        {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(dotColor(option), CircleShape),
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                    colors = portalChipColors(),
+                )
+            }
+        }
+    }
+}
+
+/** Sort order and filters for the collection page. */
+@Composable
+private fun FilterPanel(
+    figures: List<PortalFigure>,
+    versionFilter: VersionFilter,
+    sortOrder: SortOrder,
+    typeFilter: SkylanderType?,
+    elementFilter: SkylanderElement?,
+    onVersionFilterChange: (VersionFilter) -> Unit,
+    onSortOrderChange: (SortOrder) -> Unit,
+    onTypeFilterChange: (SkylanderType?) -> Unit,
+    onElementFilterChange: (SkylanderElement?) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    // Only offer filters that match at least one figure in this game.
+    val types = remember(figures) {
+        SkylanderType.entries.filter { type -> figures.any { it.info?.type == type } }
+    }
+    val elements = remember(figures) {
+        SkylanderElement.entries.filter { element -> figures.any { it.element == element } }
+    }
+
+    OverlayPanel(title = tr("Sort and filter"), onDismiss = onDismiss) {
+        ChipGroup(
+            title = tr("Show"),
+            options = VersionFilter.entries,
+            isSelected = { it == versionFilter },
+            label = { tr(it.label) },
+            onClick = onVersionFilterChange,
+        )
+        ChipGroup(
+            title = tr("Sort by"),
+            options = SortOrder.entries,
+            isSelected = { it == sortOrder },
+            label = { tr(it.label) },
+            onClick = onSortOrderChange,
+        )
+        ChipGroup(
+            title = tr("Type"),
+            options = listOf<SkylanderType?>(null) + types,
+            isSelected = { it == typeFilter },
+            label = { it?.let { type -> tr(type.label) } ?: tr("All") },
+            onClick = onTypeFilterChange,
+        )
+        ChipGroup(
+            title = tr("Element"),
+            options = listOf<SkylanderElement?>(null) + elements,
+            isSelected = { it == elementFilter },
+            label = { it?.let { element -> tr(element.label) } ?: tr("All") },
+            onClick = onElementFilterChange,
+            dotColor = { it?.color ?: Color.Transparent },
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onReset) { Text(tr("Reset")) }
+            Button(onClick = onDismiss) { Text(tr("Done")) }
+        }
+    }
+}
+
+/** Settings for how the portal screen looks. */
+@Composable
+private fun PortalSettingsPanel(
+    settings: SkylanderPortalSettings,
+    onChange: ((SkylanderPortalSettings) -> SkylanderPortalSettings) -> Unit,
+    onRefresh: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    OverlayPanel(title = tr("Portal settings"), onDismiss = onDismiss) {
+        SettingSwitch(
+            title = tr("Portal glow"),
+            description = tr("Light up and animate the centre of the portal. Turn off for an unlit portal with no animation."),
+            checked = settings.isGlowEnabled,
+            onCheckedChange = { checked -> onChange { it.copy(isGlowEnabled = checked) } },
+        )
+        SettingSwitch(
+            title = tr("Show portal"),
+            description = tr("Draw the Portal of Power above the slots. Turn off to leave more room for the slots and teams."),
+            checked = settings.isPortalVisible,
+            onCheckedChange = { checked -> onChange { it.copy(isPortalVisible = checked) } },
+        )
+        TextButton(onClick = onRefresh) { Text(tr("Reload figures and card art")) }
+    }
+}
+
+@Composable
+private fun SettingSwitch(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onCheckedChange(!checked) }
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = Color.White)
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -871,20 +1327,6 @@ private fun sortFigures(
 }
 
 @Composable
-private fun SortChips(selected: SortOrder, onSelectedChange: (SortOrder) -> Unit) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(SortOrder.entries) { option ->
-            FilterChip(
-                selected = option == selected,
-                onClick = { onSelectedChange(option) },
-                label = { Text(tr("Sort: {0}", tr(option.label))) },
-                colors = portalChipColors(),
-            )
-        }
-    }
-}
-
-@Composable
 private fun PortalSlotsRow(
     slots: Array<String?>,
     slotFigures: List<PortalFigure?>,
@@ -899,41 +1341,39 @@ private fun PortalSlotsRow(
     val hiddenInUse =
         if (showAllSlots) 0 else (NAMED_SLOT_COUNT..<slots.size).count { slots[it] != null }
 
-    PortalRing(slotFigures = slotFigures) {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 14.dp),
-        ) {
-            items(visibleSlots) { slot ->
-                SlotCard(
-                    label = slotLabel(slot),
-                    figureName = slots[slot],
-                    element = slotFigures.getOrNull(slot)?.element,
-                    isSelected = slot == selectedSlot,
-                    enabled = enabled,
-                    onClick = { onSelectSlot(slot) },
-                    onClear = { onClearSlot(slot) },
-                )
-            }
-            item {
-                Card(
-                    modifier = Modifier
-                        .width(64.dp)
-                        .height(72.dp)
-                        .clickable(onClick = onToggleAllSlots),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                ) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = when {
-                                showAllSlots -> tr("Less")
-                                hiddenInUse > 0 -> tr("More\n({0})", hiddenInUse)
-                                else -> tr("More")
-                            },
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 2.dp),
+    ) {
+        items(visibleSlots) { slot ->
+            SlotCard(
+                label = slotLabel(slot),
+                figureName = slots[slot],
+                element = slotFigures.getOrNull(slot)?.element,
+                isSelected = slot == selectedSlot,
+                enabled = enabled,
+                onClick = { onSelectSlot(slot) },
+                onClear = { onClearSlot(slot) },
+            )
+        }
+        item {
+            Card(
+                modifier = Modifier
+                    .width(64.dp)
+                    .height(72.dp)
+                    .clickable(onClick = onToggleAllSlots),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = when {
+                            showAllSlots -> tr("Less")
+                            hiddenInUse > 0 -> tr("More\n({0})", hiddenInUse)
+                            else -> tr("More")
+                        },
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             }
         }
@@ -1017,89 +1457,6 @@ private fun SlotCard(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun FilterRows(
-    figures: List<PortalFigure>,
-    typeFilter: SkylanderType?,
-    elementFilter: SkylanderElement?,
-    gameFilter: SkylanderGame?,
-    onTypeFilterChange: (SkylanderType?) -> Unit,
-    onElementFilterChange: (SkylanderElement?) -> Unit,
-    onGameFilterChange: (SkylanderGame?) -> Unit,
-) {
-    // Only offer filters that match at least one installed figure.
-    val types = remember(figures) {
-        SkylanderType.entries.filter { type -> figures.any { it.info?.type == type } }
-    }
-    val elements = remember(figures) {
-        SkylanderElement.entries.filter { element -> figures.any { it.element == element } }
-    }
-    val games = remember(figures) {
-        SkylanderGame.entries.filter { game -> figures.any { it.info?.game == game } }
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        ChipRow(
-            options = types,
-            selected = typeFilter,
-            label = { it.label },
-            onSelectedChange = onTypeFilterChange,
-        )
-        ChipRow(
-            options = elements,
-            selected = elementFilter,
-            label = { it.label },
-            dotColor = { it.color },
-            onSelectedChange = onElementFilterChange,
-        )
-        ChipRow(
-            options = games,
-            selected = gameFilter,
-            label = { it.label },
-            onSelectedChange = onGameFilterChange,
-        )
-    }
-}
-
-@Composable
-private fun <T> ChipRow(
-    options: List<T>,
-    selected: T?,
-    label: (T) -> String,
-    onSelectedChange: (T?) -> Unit,
-    dotColor: ((T) -> Color)? = null,
-) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        item {
-            FilterChip(
-                selected = selected == null,
-                onClick = { onSelectedChange(null) },
-                label = { Text(tr("All")) },
-                colors = portalChipColors(),
-            )
-        }
-        items(options) { option ->
-            FilterChip(
-                selected = option == selected,
-                onClick = { onSelectedChange(if (option == selected) null else option) },
-                label = { Text(tr(label(option))) },
-                leadingIcon = if (dotColor != null) {
-                    {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .background(dotColor(option), CircleShape),
-                        )
-                    }
-                } else {
-                    null
-                },
-                colors = portalChipColors(),
-            )
         }
     }
 }
@@ -1217,75 +1574,15 @@ private fun figureSubtitle(figure: PortalFigure): String {
     return listOfNotNull(tr(info.element.label), type, series, variant).joinToString(" · ")
 }
 
-@Composable
-private fun VersionChips(selected: VersionFilter, onSelectedChange: (VersionFilter) -> Unit) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(VersionFilter.entries) { option ->
-            FilterChip(
-                selected = option == selected,
-                onClick = { onSelectedChange(option) },
-                label = { Text(tr(option.label)) },
-                colors = portalChipColors(),
-            )
-        }
-    }
-}
-
-/** Chips to pick which game's figures are shown: the detected game, all games, or a chosen one. */
-@Composable
-private fun PlayingGameChips(
-    detectedGame: SkylanderGame?,
-    isAuto: Boolean,
-    chosenGame: SkylanderGame?,
-    onAuto: () -> Unit,
-    onChoose: (SkylanderGame?) -> Unit,
-) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        item {
-            FilterChip(
-                selected = isAuto,
-                onClick = onAuto,
-                label = {
-                    Text(
-                        if (detectedGame != null) {
-                            tr("Playing: {0}", tr(detectedGame.label))
-                        } else {
-                            tr("Playing: not detected")
-                        }
-                    )
-                },
-                colors = portalChipColors(),
-            )
-        }
-        item {
-            FilterChip(
-                selected = !isAuto && chosenGame == null,
-                onClick = { onChoose(null) },
-                label = { Text(tr("Any game")) },
-                colors = portalChipColors(),
-            )
-        }
-        items(SkylanderGame.entries) { game ->
-            FilterChip(
-                selected = !isAuto && chosenGame == game,
-                onClick = { onChoose(game) },
-                label = { Text(tr("Works in {0}", tr(game.label))) },
-                colors = portalChipColors(),
-            )
-        }
-    }
-}
-
 /** Which versions of the figures the grid shows (see [SkylanderVersions]). */
 private enum class VersionFilter(val label: String) {
     MAIN("Main roster"),
-    FAVOURITES("★ Favourites"),
     VARIANTS("Variants"),
     ALL("All versions"),
 }
 
 @Composable
-private fun FigureArt(figure: PortalFigure, artFile: File?, modifier: Modifier) {
+internal fun FigureArt(figure: PortalFigure, artFile: File?, modifier: Modifier) {
     val assets = LocalContext.current.assets
     val cacheKey = skylanderArtCacheKey(figure, artFile)
     // Start from the cache so cards scrolling back into view show their art straight away.
@@ -1393,92 +1690,6 @@ private fun PortalTheme(content: @Composable () -> Unit) {
         Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
             content()
         }
-    }
-}
-
-private fun ledColor(rgb: Int): Color? = if (rgb and 0xFFFFFF == 0) null else Color(0xFF000000.toInt() or rgb)
-
-/**
- * A drawn portal behind the slot cards. The ring takes the colours the game sets on the real
- * portal's LEDs, falling back to the element colours of the figures on Player 1 and Player 2.
- * It flashes briefly when figures are placed or removed. It is not animated otherwise, so it
- * costs nothing while the game runs.
- */
-@Composable
-private fun PortalRing(slotFigures: List<PortalFigure?>, content: @Composable () -> Unit) {
-    val ledColors by produceState(IntArray(3)) {
-        while (true) {
-            val colors = runCatching { NativeEmulatedUSBDevices.getSkylanderPortalColors() }.getOrNull()
-            if (colors != null && colors.size == 3 && !colors.contentEquals(value)) {
-                value = colors
-            }
-            delay(500)
-        }
-    }
-    val gold = MaterialTheme.colorScheme.primary
-    val leftTarget = ledColor(ledColors[0]) ?: slotFigures.getOrNull(PLAYER_1_SLOT)?.element?.color ?: gold
-    val rightTarget = ledColor(ledColors[1]) ?: slotFigures.getOrNull(PLAYER_2_SLOT)?.element?.color ?: leftTarget
-    val trapTarget = ledColor(ledColors[2]) ?: Color.Transparent
-    val left by animateColorAsState(leftTarget, tween(600), label = "portalLeft")
-    val right by animateColorAsState(rightTarget, tween(600), label = "portalRight")
-    val trap by animateColorAsState(trapTarget, tween(600), label = "portalTrap")
-
-    val flash = remember { Animatable(0f) }
-    val occupancy = slotFigures.map { it?.installed?.path }
-    LaunchedEffect(occupancy) {
-        flash.snapTo(1f)
-        flash.animateTo(0f, tween(900))
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(104.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(modifier = Modifier.matchParentSize()) {
-            val glow = 0.35f + 0.5f * flash.value
-            // Soft glow around the portal, squashed into an ellipse.
-            withTransform({ scale(1f, size.height / size.width, center) }) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(lerp(left, right, 0.5f).copy(alpha = glow), Color.Transparent),
-                        center = center,
-                        radius = size.width / 2f,
-                    ),
-                    radius = size.width / 2f,
-                    center = center,
-                )
-            }
-            val ringInset = 6.dp.toPx()
-            val ringSize = Size(size.width - ringInset * 2, size.height - ringInset * 2)
-            val ringTopLeft = Offset(ringInset, ringInset)
-            // The portal's top surface.
-            drawOval(color = Color(0xFF07070A), topLeft = ringTopLeft, size = ringSize)
-            // Trap light in the middle of the portal, as on the Trap Team portal.
-            if (trap.alpha > 0f) {
-                withTransform({ scale(1f, size.height / size.width, center) }) {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(trap.copy(alpha = trap.alpha * 0.55f), Color.Transparent),
-                            center = center,
-                            radius = size.width * 0.3f,
-                        ),
-                        radius = size.width * 0.3f,
-                        center = center,
-                    )
-                }
-            }
-            // The lit ring: left LED colour on the left, right LED colour on the right.
-            drawOval(
-                brush = Brush.horizontalGradient(listOf(left, right)),
-                topLeft = ringTopLeft,
-                size = ringSize,
-                alpha = 0.75f + 0.25f * flash.value,
-                style = Stroke(width = 3.dp.toPx() + 3.dp.toPx() * flash.value),
-            )
-        }
-        content()
     }
 }
 

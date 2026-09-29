@@ -80,8 +80,28 @@ data class AppSettings(
     val skylanderTeams: List<SkylanderTeam> = emptyList(),
     /** Favourite Skylanders, by [info.cemu.cemu.emulation.emulatedusbdevices.PortalFigure.favouriteKey]. */
     val skylanderFavourites: Set<String> = emptySet(),
-    /** When each figure file was last placed on the portal, in milliseconds since the epoch. */
+    /**
+     * No longer used: replaced by [skylanderLastUsedByGame]. Kept because settings are decoded
+     * strictly, so removing a field that existing settings files still contain would make them
+     * fail to load and reset every setting.
+     */
+    @Deprecated("Replaced by skylanderLastUsedByGame.")
     val skylanderLastUsed: Map<String, Long> = emptyMap(),
+    /**
+     * When each figure file was last placed on the portal, in milliseconds since the epoch, per
+     * Skylanders game (keyed by game name, or "ANY" when the game isn't known).
+     */
+    val skylanderLastUsedByGame: Map<String, Map<String, Long>> = emptyMap(),
+    val skylanderPortalSettings: SkylanderPortalSettings = SkylanderPortalSettings(),
+)
+
+/** How the Skylanders portal screen looks. */
+@Serializable
+data class SkylanderPortalSettings(
+    /** Whether the portal's centre glows and shimmers. Off draws an unlit portal. */
+    val isGlowEnabled: Boolean = true,
+    /** Whether the drawn portal is shown on the portal page, above the slots. */
+    val isPortalVisible: Boolean = true,
 )
 
 object AppSettingsSerializer : Serializer<AppSettings> {
