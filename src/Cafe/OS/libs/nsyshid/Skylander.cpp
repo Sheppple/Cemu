@@ -8,9 +8,14 @@
 #include "Common/FileStream.h"
 #include "audio/IAudioAPI.h"
 #include "config/CemuConfig.h"
+#include "Cemu/Logging/CemuLogging.h"
 
 namespace nsyshid
 {
+	// Portal traffic logging (written to log.txt). Capped so a long session cannot flood the log.
+	static uint32 s_skyLogBudget = 20000;
+#define SKYLOG(...) do { if (s_skyLogBudget) { --s_skyLogBudget; cemuLog_log(LogType::Force, __VA_ARGS__); } } while (0)
+
 	SkylanderUSB g_skyportal;
 
 	const std::map<const std::pair<const uint16, const uint16>, const char*>
@@ -849,12 +854,17 @@ namespace nsyshid
 		if (foundSlot != 0xFF)
 		{
 			auto& skylander = m_skylanders[foundSlot];
+			SKYLOG("SKY load slot={} serial={:08x} previousSerialInSlot={:08x} fileOpen={}", foundSlot, skySerial, skylander.lastId, file != nullptr);
 			memcpy(skylander.data.data(), buf, skylander.data.size());
 			skylander.skyFile = std::move(file);
 			skylander.status = Skylander::ADDED;
 			skylander.queuedStatus.push(Skylander::ADDED);
 			skylander.queuedStatus.push(Skylander::READY);
 			skylander.lastId = skySerial;
+		}
+		else
+		{
+			SKYLOG("SKY load FAILED no free slot serial={:08x}", skySerial);
 		}
 		return foundSlot;
 	}
@@ -864,6 +874,7 @@ namespace nsyshid
 		std::lock_guard lock(m_skyMutex);
 		auto& thesky = m_skylanders[skyNum];
 
+		SKYLOG("SKY remove slot={} status={} hasFile={}", skyNum, thesky.status, thesky.skyFile != nullptr);
 		if (thesky.status & 1)
 		{
 			thesky.status = 2;
@@ -871,9 +882,11 @@ namespace nsyshid
 			thesky.queuedStatus.push(0);
 			thesky.Save();
 			thesky.skyFile.reset();
+			SKYLOG("SKY remove slot={} saved and closed", skyNum);
 			return true;
 		}
 
+		SKYLOG("SKY remove slot={} IGNORED (not ready)", skyNum);
 		return false;
 	}
 
@@ -928,6 +941,7 @@ namespace nsyshid
 
 		replyBuf[0] = 'Q';
 		replyBuf[2] = block;
+		SKYLOG("SKY Q slot={} block={} status={} {}", skyNum, block, skylander.status, (skylander.status & 1) ? "OK" : "NOT-PRESENT");
 		if (skylander.status & 1)
 		{
 			replyBuf[1] = (0x10 | skyNum);
@@ -948,6 +962,7 @@ namespace nsyshid
 
 		replyBuf[0] = 'W';
 		replyBuf[2] = block;
+		SKYLOG("SKY W slot={} block={} status={} {} crc={:04x}", skyNum, block, skylander.status, (skylander.status & 1) ? "ACCEPTED" : "REJECTED", SkylanderCRC16(0xFFFF, toWriteBuf, 16));
 
 		if (skylander.status & 1)
 		{
@@ -1024,9 +1039,16 @@ namespace nsyshid
 	void SkylanderUSB::Skylander::Save()
 	{
 		if (!skyFile)
+		{
+			SKYLOG("SKY save skipped: no file open");
 			return;
+		}
 
 		skyFile->SetPosition(0);
 		skyFile->writeData(data.data(), data.size());
+		// Push the write to disk now; the stream otherwise holds the latest save in memory until the next save or close.
+#ifdef __ANDROID__
+		skyFile->Flush();
+#endif
 	}
 } // namespace nsyshid
